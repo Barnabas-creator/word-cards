@@ -483,9 +483,36 @@ test("例句用派生形也算提到", () => {
   assert.deepEqual(checkDeck({ cards: [der], fakes: [], wordBase }), []);
 });
 
-test("中文释义过长或含机翻腔报错", () => {
-  assert.ok(checkDeck({ cards: [{ ...card, zh: "进行了一个国家的行为" }], fakes: [], wordBase })
-    .some((e) => /机翻/.test(e)));
+test("中文释义过长报错", () => {
+  assert.ok(checkDeck({ cards: [{ ...card, zh: "国".repeat(21) }], fakes: [], wordBase })
+    .some((e) => /过长/.test(e)));
+});
+
+test("中文释义混入拉丁字母报错", () => {
+  assert.ok(checkDeck({ cards: [{ ...card, zh: "国家 nation" }], fakes: [], wordBase })
+    .some((e) => /拉丁字母/.test(e)));
+});
+
+test("中文释义出现叠词「的的」报错", () => {
+  assert.ok(checkDeck({ cards: [{ ...card, zh: "国家的的民族" }], fakes: [], wordBase })
+    .some((e) => /的的/.test(e)));
+});
+
+test("短词不被无关词误匹配", () => {
+  const wb = new Set(["run", "runway"]);
+  const runCard = { ...card, w: "run", fam: [], conf: [],
+    ex: "The runway was closed for repairs during the whole winter season.",
+    zh: "跑、奔跑" };
+  assert.ok(checkDeck({ cards: [runCard], fakes: [], wordBase: wb })
+    .some((e) => /例句未出现/.test(e)));
+});
+
+test("y 结尾词的 -ies 屈折算提到", () => {
+  const wb = new Set(["study", "studies"]);
+  const studyCard = { ...card, w: "study", fam: [], conf: [],
+    ex: "She studies English grammar every evening after finishing her office work.",
+    zh: "学习、研究" };
+  assert.deepEqual(checkDeck({ cards: [studyCard], fakes: [], wordBase: wb }), []);
 });
 
 test("逐条 schema 错误一并带出", () => {
@@ -507,17 +534,30 @@ import { validateCard } from "./card-schema.mjs";
 import { validateFake } from "./fake-schema.mjs";
 import { isRealWord } from "./wordbase.mjs";
 
-const MT_PATTERNS = [/进行了一个/, /被认为是/, /的的/, /作出了/];
 const ZH_MAX = 20;
 
 function words(sentence) {
   return String(sentence).toLowerCase().match(/[a-z']+/g) ?? [];
 }
 
+// 前缀匹配对短词太松（run 会被 runway 满足）、对 y 结尾太紧（study 匹配不上 studies），
+// 所以生成屈折形做全词比对。
+export function wordForms(word) {
+  const w = String(word).toLowerCase();
+  const forms = new Set([w, w + "s", w + "es", w + "ed", w + "ing"]);
+  if (w.endsWith("e")) { forms.add(w.slice(0, -1) + "ed"); forms.add(w.slice(0, -1) + "ing"); }
+  if (w.endsWith("y")) { forms.add(w.slice(0, -1) + "ies"); forms.add(w.slice(0, -1) + "ied"); }
+  const last = w.at(-1);
+  if (/[bdgklmnprt]/.test(last)) { forms.add(w + last + "ed"); forms.add(w + last + "ing"); }
+  return forms;
+}
+
 export function exMentions(ex, w, fam) {
-  const stems = [w, ...(fam ?? [])].map((s) => String(s).toLowerCase())
-    .map((s) => s.slice(0, Math.max(4, Math.min(s.length, 5))));
-  return words(ex).some((tok) => stems.some((stem) => tok.startsWith(stem)));
+  const allForms = new Set();
+  for (const word of [w, ...(fam ?? [])]) {
+    for (const form of wordForms(word)) allForms.add(form);
+  }
+  return words(ex).some((tok) => allForms.has(tok));
 }
 
 export function checkDeck({ cards = [], fakes = [], wordBase }) {
@@ -555,7 +595,8 @@ export function checkDeck({ cards = [], fakes = [], wordBase }) {
 
     const zh = String(card?.zh ?? "");
     if (zh.length > ZH_MAX) errs.push(`${where}：中文释义过长（${zh.length} 字，上限 ${ZH_MAX}）`);
-    if (MT_PATTERNS.some((re) => re.test(zh))) errs.push(`${where}：中文释义疑似机翻腔`);
+    if (/[A-Za-z]/.test(zh)) errs.push(`${where}：中文释义里混入了拉丁字母`);
+    if (/的的/.test(zh)) errs.push(`${where}：中文释义出现叠词「的的」`);
   }
 
   return errs;
@@ -565,7 +606,7 @@ export function checkDeck({ cards = [], fakes = [], wordBase }) {
 - [ ] **Step 4: 跑测试确认通过**
 
 Run: `cd ~/word-cards && node --test tools/check-deck.test.mjs`
-Expected: PASS，11 个测试全绿
+Expected: PASS，15 个测试全绿
 
 - [ ] **Step 5: 提交**
 
@@ -1145,6 +1186,12 @@ test("cardsFromResponse 按词形回填 lvl 与 src", () => {
   assert.equal(out[0].src, "NGSL");
 });
 
+test("cardsFromResponse 用批次里的规范拼写，而不是模型返回的拼写", () => {
+  const items = [{ w: "Nation", ipa: "/x/", pos: "n.", zh: "国家", fam: [], ex: "a", exZh: "啊", conf: [], c: ["名词"] }];
+  const out = cardsFromResponse(items, [{ w: "nation", lvl: "B1", src: "NGSL" }]);
+  assert.equal(out[0].w, "nation");
+});
+
 test("cardsFromResponse 丢掉批次里没点过的词", () => {
   const items = [{ w: "ghost", ipa: "/x/", pos: "n.", zh: "鬼", fam: [], ex: "a", exZh: "啊", conf: [], c: ["名词"] }];
   assert.deepEqual(cardsFromResponse(items, [{ w: "nation", lvl: "B1", src: "NGSL" }]), []);
@@ -1174,7 +1221,7 @@ export const DECK_PROMPT = `你是一个英语—中文双语词典编辑，为�
 - ex：一个英语例句，长度 8–20 个词，难度控制在 CEFR B2，必须包含该词或它的某个派生形
 - exZh：例句的中文翻译，自然流畅
 - conf：形近或义近的易混词，最多 3 个，必须是真实英语词。没有就给空数组
-- c：中文词性标签，只能从这些里选：${POS_TAGS.join(" / ")}
+- c：中文词性标签，至少 1 个，最多 4 个，只能从这些里选：${POS_TAGS.join(" / ")}
 
 只输出 JSON 数组，不要任何解释文字。`;
 
@@ -1187,11 +1234,11 @@ export const DECK_SCHEMA = {
       ipa: { type: "string" },
       pos: { type: "string" },
       zh: { type: "string" },
-      fam: { type: "array", items: { type: "string" } },
+      fam: { type: "array", items: { type: "string" }, maxItems: 4 },
       ex: { type: "string" },
       exZh: { type: "string" },
-      conf: { type: "array", items: { type: "string" } },
-      c: { type: "array", items: { type: "string" } },
+      conf: { type: "array", items: { type: "string" }, maxItems: 3 },
+      c: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 4 },
     },
     required: ["w", "ipa", "pos", "zh", "fam", "ex", "exZh", "conf", "c"],
   },
@@ -1237,7 +1284,7 @@ export function cardsFromResponse(items, batch) {
 - [ ] **Step 4: 跑测试确认通过**
 
 Run: `cd ~/word-cards && node --test tools/gen-core.test.mjs`
-Expected: PASS，7 个测试全绿
+Expected: PASS，8 个测试全绿
 
 - [ ] **Step 5: 提交**
 
@@ -1766,7 +1813,7 @@ git commit -m "$(printf 'feat: 全量生成 4064 条真词卡与分片 manifest\
 
 ## 完成标准
 
-- `npm test` 全绿（约 60 个单测）
+- `npm test` 全绿（约 60 个单测；Task 8 完成时为 57 个）
 - `node tools/check-data.mjs` 退出码 0
 - `data/` 含 5 个真词分片（合计约 4064 条，DET 补充前为 3764 条）、`fakewords.json`（1200 条）、`manifest.json`、`wordlist.json`
 - 每个 CEFR 等级各 30 条人工抽检通过
