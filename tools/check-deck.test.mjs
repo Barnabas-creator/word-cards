@@ -59,9 +59,45 @@ test("例句用派生形也算提到", () => {
   assert.deepEqual(checkDeck({ cards: [der], fakes: [], wordBase }), []);
 });
 
-test("中文释义过长或含机翻腔报错", () => {
-  assert.ok(checkDeck({ cards: [{ ...card, zh: "进行了一个国家的行为" }], fakes: [], wordBase })
-    .some((e) => /机翻/.test(e)));
+test("中文释义过长报错", () => {
+  const longZh = "a".repeat(21);
+  assert.ok(checkDeck({ cards: [{ ...card, zh: longZh }], fakes: [], wordBase })
+    .some((e) => /过长/.test(e)));
+});
+
+test("中文释义混入拉丁字母报错", () => {
+  assert.ok(checkDeck({ cards: [{ ...card, zh: "国家abc" }], fakes: [], wordBase })
+    .some((e) => /拉丁字母/.test(e)));
+});
+
+test("中文释义出现叠词报错", () => {
+  assert.ok(checkDeck({ cards: [{ ...card, zh: "好的的很好" }], fakes: [], wordBase })
+    .some((e) => /的的/.test(e)));
+});
+
+test("短词不误匹配无关词根", () => {
+  const runCard = {
+    w: "run", ipa: "/rʌn/", pos: "v.", zh: "运行、跑步",
+    fam: [],
+    ex: "The runway was clear and the plane could take off immediately.",
+    exZh: "跑道很清晰，飞机可以立即起飞。",
+    conf: [], lvl: "A1", src: "NGSL", c: ["动词"],
+  };
+  const runWordBase = new Set(["run", "runway"]);
+  assert.ok(checkDeck({ cards: [runCard], fakes: [], wordBase: runWordBase })
+    .some((e) => /例句未出现/.test(e)));
+});
+
+test("inflection studies匹配study", () => {
+  const studyCard = {
+    w: "study", ipa: "/ˈstʌdi/", pos: "v.", zh: "学习、研究",
+    fam: [],
+    ex: "She studies hard every day and makes good progress in her academic work.",
+    exZh: "她每天认真学习，在学术工作中取得良好进展。",
+    conf: [], lvl: "A1", src: "NGSL", c: ["动词"],
+  };
+  const studyWordBase = new Set(["study", "studies"]);
+  assert.deepEqual(checkDeck({ cards: [studyCard], fakes: [], wordBase: studyWordBase }), []);
 });
 
 test("逐条 schema 错误一并带出", () => {
