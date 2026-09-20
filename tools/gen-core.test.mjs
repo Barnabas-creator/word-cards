@@ -45,3 +45,9 @@ test("cardsFromResponse 丢掉批次里没点过的词", () => {
   const items = [{ w: "ghost", ipa: "/x/", pos: "n.", zh: "鬼", fam: [], ex: "a", exZh: "啊", conf: [], c: ["名词"] }];
   assert.deepEqual(cardsFromResponse(items, [{ w: "nation", lvl: "B1", src: "NGSL" }]), []);
 });
+
+test("cardsFromResponse 用批次的词形覆盖模型返回的词形", () => {
+  const items = [{ w: "Nation", ipa: "/x/", pos: "n.", zh: "国家", fam: [], ex: "a", exZh: "啊", conf: [], c: ["名词"] }];
+  const out = cardsFromResponse(items, [{ w: "nation", lvl: "B1", src: "NGSL" }]);
+  assert.equal(out[0].w, "nation");
+});
