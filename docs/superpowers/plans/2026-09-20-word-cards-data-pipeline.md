@@ -871,25 +871,62 @@ git commit -m "$(printf 'feat: 数据校验 CLI\n\nCo-Authored-By: Claude Opus 5
 ### Task 7: 词表获取与清洗
 
 **Files:**
-- Create: `tools/build-wordlist.mjs`
+- Create: `tools/fetch-wordlists.mjs`
 - Create: `lib/wordlist.mjs`
-- Create: `tools/det-supplement.txt`（人工维护的 DET 补充词，每行一词）
+- Create: `tools/det-supplement.txt`（人工维护的 DET 补充词，每行一词，先建空文件）
 - Test: `tools/wordlist.test.mjs`
-- 产物: `data/wordlist.json`
+- 产物: `tools/vendor/ngsl.json`、`tools/vendor/nawl.json`、`data/wordlist.json`
 
 **Interfaces:**
 - Consumes: `LEVELS`（Task 1）
 - Produces:
-  - `parseNgslCsv(text: string) => { w: string, rank: number }[]`
-  - `assignLevel(rank: number, src: string) => string`
+  - `parseBands(json: object) => { w: string, band: number }[]`（NGSL 用，三个频段摊平）
+  - `parseFlat(json: object) => { w: string, band: number }[]`（NAWL 用，无频段，band 记 0）
+  - `assignLevel(band: number, src: string) => string`
   - `mergeSources({ ngsl, nawl, det }) => { w, lvl, src }[]`
 
-- [ ] **Step 1: 人工取词表**
+词表来源为 `lpmi-13/machine_readable_wordlists`（CC BY-SA，机器可读）：
 
-NGSL 与 NAWL 从 https://www.newgeneralservicelist.com/ 下载 CSV（均为 CC BY-SA 4.0），
-存为 `tools/vendor/ngsl.csv`、`tools/vendor/nawl.csv`。CSV 至少含词形列与排名列。
+- NGSL：`General/NGSL/NGSL.json`，顶层是三个频段键 `"1000"` `"2000"` `"3000"`，
+  每个频段下是 `headword -> 同词族词形数组`，合计 2801 个词头
+- NAWL：`Academic/NAWL/NAWL.json`，顶层直接是 `headword -> 词形数组`，963 个词头
 
-`tools/det-supplement.txt` 先留空文件，Task 11 抽检后再补。
+两表零重叠，合计 3764 词，加 DET 补充约 300 词达到 4064。
+
+- [ ] **Step 1: 下载词表**
+
+`tools/fetch-wordlists.mjs`：
+
+```js
+import { writeFileSync, mkdirSync } from "node:fs";
+
+const BASE = "https://raw.githubusercontent.com/lpmi-13/machine_readable_wordlists/master";
+const FILES = [
+  ["ngsl.json", `${BASE}/General/NGSL/NGSL.json`, 2801],
+  ["nawl.json", `${BASE}/Academic/NAWL/NAWL.json`, 963],
+];
+
+mkdirSync(new URL("./vendor/", import.meta.url), { recursive: true });
+for (const [name, url, expect] of FILES) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${name} 下载失败：HTTP ${res.status}`);
+  const json = await res.json();
+  const count = Object.values(json).reduce(
+    (n, v) => n + (Array.isArray(v) ? 1 : Object.keys(v).length), 0);
+  if (count !== expect) throw new Error(`${name} 词头数 ${count}，预期 ${expect}`);
+  writeFileSync(new URL(`./vendor/${name}`, import.meta.url), JSON.stringify(json));
+  console.log(`${name}：${count} 个词头`);
+}
+```
+
+Run: `cd ~/word-cards && node tools/fetch-wordlists.mjs`
+Expected: 打印 `ngsl.json：2801 个词头` 与 `nawl.json：963 个词头`
+
+`tools/det-supplement.txt` 先建成空文件（Task 11 抽检后再补）：
+
+```bash
+cd ~/word-cards && touch tools/det-supplement.txt
+```
 
 - [ ] **Step 2: 写失败的测试**
 
@@ -898,37 +935,45 @@ NGSL 与 NAWL 从 https://www.newgeneralservicelist.com/ 下载 CSV（均为 CC 
 ```js
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseNgslCsv, assignLevel, mergeSources } from "../lib/wordlist.mjs";
+import { parseBands, parseFlat, assignLevel, mergeSources } from "../lib/wordlist.mjs";
 
-test("parseNgslCsv 取词形与排名，跳过表头与空行", () => {
-  const csv = "Lemma,Rank\nthe,1\nbe,2\n\nnation,850\n";
-  assert.deepEqual(parseNgslCsv(csv), [
-    { w: "the", rank: 1 }, { w: "be", rank: 2 }, { w: "nation", rank: 850 },
+test("parseBands 摊平三个频段，记下频段号", () => {
+  const json = { "1000": { be: [], and: [] }, "2000": { nation: [] }, "3000": { cognitive: [] } };
+  assert.deepEqual(parseBands(json), [
+    { w: "be", band: 1000 }, { w: "and", band: 1000 },
+    { w: "nation", band: 2000 }, { w: "cognitive", band: 3000 },
   ]);
 });
 
-test("parseNgslCsv 归一化大小写并去掉引号", () => {
-  assert.deepEqual(parseNgslCsv('Lemma,Rank\n"Nation",5\n'), [{ w: "nation", rank: 5 }]);
+test("parseBands 归一化大小写", () => {
+  assert.deepEqual(parseBands({ "1000": { Nation: [] } }), [{ w: "nation", band: 1000 }]);
 });
 
-test("assignLevel 按 NGSL 排名分档", () => {
-  assert.equal(assignLevel(1, "NGSL"), "A1");
-  assert.equal(assignLevel(800, "NGSL"), "A1");
-  assert.equal(assignLevel(801, "NGSL"), "A2");
-  assert.equal(assignLevel(1600, "NGSL"), "A2");
-  assert.equal(assignLevel(1601, "NGSL"), "B1");
-  assert.equal(assignLevel(2801, "NGSL"), "B1");
+test("parseFlat 取词头，band 记 0", () => {
+  assert.deepEqual(parseFlat({ abdominal: [], absorb: ["absorbs"] }), [
+    { w: "abdominal", band: 0 }, { w: "absorb", band: 0 },
+  ]);
+});
+
+test("assignLevel 按 NGSL 频段分档", () => {
+  assert.equal(assignLevel(1000, "NGSL"), "A1");
+  assert.equal(assignLevel(2000, "NGSL"), "A2");
+  assert.equal(assignLevel(3000, "NGSL"), "B1");
 });
 
 test("assignLevel 把 NAWL 归到 B2、DET 补充归到 B2+", () => {
-  assert.equal(assignLevel(1, "NAWL"), "B2");
-  assert.equal(assignLevel(1, "DET"), "B2+");
+  assert.equal(assignLevel(0, "NAWL"), "B2");
+  assert.equal(assignLevel(0, "DET"), "B2+");
 });
 
-test("mergeSources 去重：同一个词优先保留排名靠前的来源", () => {
+test("assignLevel 遇到未知频段抛错，不静默兜底", () => {
+  assert.throws(() => assignLevel(4000, "NGSL"), /频段/);
+});
+
+test("mergeSources 去重：同一个词优先保留先出现的来源", () => {
   const out = mergeSources({
-    ngsl: [{ w: "nation", rank: 850 }],
-    nawl: [{ w: "nation", rank: 3 }, { w: "cognitive", rank: 4 }],
+    ngsl: [{ w: "nation", band: 2000 }],
+    nawl: [{ w: "nation", band: 0 }, { w: "cognitive", band: 0 }],
     det: ["nation", "bespoke"],
   });
   assert.deepEqual(out, [
@@ -936,6 +981,11 @@ test("mergeSources 去重：同一个词优先保留排名靠前的来源", () =
     { w: "cognitive", lvl: "B2", src: "NAWL" },
     { w: "bespoke", lvl: "B2+", src: "DET" },
   ]);
+});
+
+test("mergeSources 忽略 det 里的空行与前后空白", () => {
+  const out = mergeSources({ ngsl: [], nawl: [], det: ["  bespoke  ", "", "   "] });
+  assert.deepEqual(out, [{ w: "bespoke", lvl: "B2+", src: "DET" }]);
 });
 ```
 
@@ -949,41 +999,40 @@ Expected: FAIL，报 `Cannot find module '../lib/wordlist.mjs'`
 `lib/wordlist.mjs`：
 
 ```js
-export function parseNgslCsv(text) {
+const NGSL_BAND_LEVEL = { 1000: "A1", 2000: "A2", 3000: "B1" };
+
+export function parseBands(json) {
   const out = [];
-  const lines = text.split("\n").slice(1);
-  for (const line of lines) {
-    const raw = line.trim();
-    if (!raw) continue;
-    const [wRaw, rankRaw] = raw.split(",");
-    const w = String(wRaw).trim().replace(/^"|"$/g, "").toLowerCase();
-    const rank = Number(String(rankRaw).trim().replace(/^"|"$/g, ""));
-    if (!w || !Number.isFinite(rank)) continue;
-    out.push({ w, rank });
+  for (const [band, words] of Object.entries(json)) {
+    for (const w of Object.keys(words)) out.push({ w: w.toLowerCase(), band: Number(band) });
   }
   return out;
 }
 
-export function assignLevel(rank, src) {
+export function parseFlat(json) {
+  return Object.keys(json).map((w) => ({ w: w.toLowerCase(), band: 0 }));
+}
+
+export function assignLevel(band, src) {
   if (src === "NAWL") return "B2";
   if (src === "DET") return "B2+";
-  if (rank <= 800) return "A1";
-  if (rank <= 1600) return "A2";
-  return "B1";
+  const lvl = NGSL_BAND_LEVEL[band];
+  if (!lvl) throw new Error(`未知的 NGSL 频段：${band}`);
+  return lvl;
 }
 
 export function mergeSources({ ngsl = [], nawl = [], det = [] }) {
   const seen = new Set();
   const out = [];
-  const push = (w, rank, src) => {
-    const key = w.toLowerCase();
-    if (seen.has(key)) return;
+  const push = (w, band, src) => {
+    const key = String(w).trim().toLowerCase();
+    if (!key || seen.has(key)) return;
     seen.add(key);
-    out.push({ w: key, lvl: assignLevel(rank, src), src });
+    out.push({ w: key, lvl: assignLevel(band, src), src });
   };
-  for (const e of ngsl) push(e.w, e.rank, "NGSL");
-  for (const e of nawl) push(e.w, e.rank, "NAWL");
-  for (const w of det) push(String(w).trim(), 0, "DET");
+  for (const e of ngsl) push(e.w, e.band, "NGSL");
+  for (const e of nawl) push(e.w, e.band, "NAWL");
+  for (const w of det) push(w, 0, "DET");
   return out;
 }
 ```
@@ -991,22 +1040,21 @@ export function mergeSources({ ngsl = [], nawl = [], det = [] }) {
 `tools/build-wordlist.mjs`：
 
 ```js
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { parseNgslCsv, mergeSources } from "../lib/wordlist.mjs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { parseBands, parseFlat, mergeSources } from "../lib/wordlist.mjs";
 
-const v = (f) => new URL(`./vendor/${f}`, import.meta.url).pathname;
-const read = (p) => readFileSync(p, "utf8");
+const read = (u) => JSON.parse(readFileSync(new URL(u, import.meta.url), "utf8"));
 
-const ngsl = parseNgslCsv(read(v("ngsl.csv")));
-const nawl = parseNgslCsv(read(v("nawl.csv")));
-const detPath = new URL("./det-supplement.txt", import.meta.url).pathname;
-const det = existsSync(detPath)
-  ? read(detPath).split("\n").map((s) => s.trim()).filter(Boolean)
+const ngsl = parseBands(read("./vendor/ngsl.json"));
+const nawl = parseFlat(read("./vendor/nawl.json"));
+const detUrl = new URL("./det-supplement.txt", import.meta.url);
+const det = existsSync(detUrl)
+  ? readFileSync(detUrl, "utf8").split("\n").map((s) => s.trim()).filter(Boolean)
   : [];
 
 const list = mergeSources({ ngsl, nawl, det });
-const out = new URL("../data/wordlist.json", import.meta.url).pathname;
-writeFileSync(out, JSON.stringify(list, null, 0));
+mkdirSync(new URL("../data/", import.meta.url), { recursive: true });
+writeFileSync(new URL("../data/wordlist.json", import.meta.url), JSON.stringify(list));
 
 const byLvl = {};
 for (const e of list) byLvl[e.lvl] = (byLvl[e.lvl] ?? 0) + 1;
@@ -1016,19 +1064,20 @@ console.log(`共 ${list.length} 词：`, byLvl);
 - [ ] **Step 5: 跑测试确认通过**
 
 Run: `cd ~/word-cards && node --test tools/wordlist.test.mjs`
-Expected: PASS，5 个测试全绿
+Expected: PASS，8 个测试全绿
 
 - [ ] **Step 6: 跑一次生成，核对总数**
 
-Run: `cd ~/word-cards && mkdir -p data && node tools/build-wordlist.mjs`
-Expected: 打印总数落在 3700–4100 之间。偏离超出这个区间就停下来查 CSV 列名是否对得上，不要继续。
+Run: `cd ~/word-cards && node tools/build-wordlist.mjs`
+Expected: 打印 `共 3764 词： { A1: 1000, A2: 1000, B1: 801, B2: 963 }`。
+数字对不上就停下来查 vendor JSON 是否完整，不要继续。（DET 补充此时还是空的，B2+ 为 0。）
 
 - [ ] **Step 7: 提交**
 
 ```bash
 cd ~/word-cards
-git add lib/wordlist.mjs tools/build-wordlist.mjs tools/det-supplement.txt tools/wordlist.test.mjs tools/vendor/ngsl.csv tools/vendor/nawl.csv data/wordlist.json
-git commit -m "$(printf 'feat: NGSL/NAWL 词表清洗与等级分档\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>')"
+git add lib/wordlist.mjs tools/fetch-wordlists.mjs tools/build-wordlist.mjs tools/det-supplement.txt tools/wordlist.test.mjs tools/vendor/ngsl.json tools/vendor/nawl.json data/wordlist.json
+git commit -m "$(printf 'feat: NGSL/NAWL 词表下载、清洗与等级分档\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>')"
 ```
 
 ---
@@ -1719,7 +1768,7 @@ git commit -m "$(printf 'feat: 全量生成 4064 条真词卡与分片 manifest\
 
 - `npm test` 全绿（约 60 个单测）
 - `node tools/check-data.mjs` 退出码 0
-- `data/` 含 5 个真词分片（合计约 4064 条）、`fakewords.json`（1200 条）、`manifest.json`、`wordlist.json`
+- `data/` 含 5 个真词分片（合计约 4064 条，DET 补充前为 3764 条）、`fakewords.json`（1200 条）、`manifest.json`、`wordlist.json`
 - 每个 CEFR 等级各 30 条人工抽检通过
 
 ## 下一份计划
