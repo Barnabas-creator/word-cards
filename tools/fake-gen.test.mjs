@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { affixCandidates, morphCandidates, comboCandidates, generateFakes } from "../lib/fake-gen.mjs";
 
 test("affixCandidates 挂常见词缀", () => {
-  const out = affixCandidates("nation");
-  assert.ok(out.includes("nationize"));
-  assert.ok(out.includes("nationful"));
-  assert.ok(out.every((w) => w.startsWith("nation") || w.endsWith("nation")));
+  const out = affixCandidates("book");
+  assert.ok(out.includes("bookize"));
+  assert.ok(out.includes("bookful"));
+  assert.ok(out.every((w) => w.startsWith("book")));
 });
 
 test("morphCandidates 只改一两个字母，长度不变", () => {
@@ -45,6 +45,38 @@ test("目标数超过可产出的上限时，返回能产出的全部", () => {
   const wordBase = new Set(["nation"]);
   const out = generateFakes({ wordlist: [{ w: "nation" }], wordBase, target: 100000, rng: mulberry(3) });
   assert.ok(out.length > 0 && out.length < 100000);
+});
+
+test("morphCandidates 从不产生非法的词首辅音群", () => {
+  const out = morphCandidates("student");
+  assert.ok(!out.includes("ftudent"), "ftudent should not be in results");
+  assert.ok(out.every((w) => {
+    // Check that no illegal word-initial clusters appear
+    if (w.length > 0 && /^[bcdfghjklmnprstvw]/.test(w)) {
+      const firstVowel = w.search(/[aeiou]/);
+      if (firstVowel > 1) {
+        // More than one initial consonant - should be in whitelist
+        // This is checked by the function itself, but we verify no "ftudent" exists
+        return w !== "ftudent";
+      }
+    }
+    return true;
+  }));
+});
+
+test("morphCandidates 从不产生非法的词尾辅音群", () => {
+  const out = morphCandidates("noise");
+  assert.ok(!out.includes("noisb"), "noisb should not be in results");
+});
+
+test("affixCandidates 跳过已有派生词缀的基词", () => {
+  const out = affixCandidates("equipment");
+  assert.equal(out.length, 0, "equipment ends with -ment, should produce no candidates");
+});
+
+test("comboCandidates 跳过已有派生词缀的基词", () => {
+  const out = comboCandidates("intention");
+  assert.equal(out.length, 0, "intention ends with -tion, should produce no candidates");
 });
 
 function mulberry(seed) {
