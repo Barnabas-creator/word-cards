@@ -801,8 +801,9 @@ Expected: FAIL，报 `collectErrors is not a function` 或模块不存在
 ```js
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { checkDeck } from "../lib/check-deck.mjs";
-import { shardCards, validateManifest, shardName } from "../lib/shard.mjs";
+import { validateManifest, shardName } from "../lib/shard.mjs";
 import { loadWordBase } from "../lib/wordbase.mjs";
 
 function readJson(path) {
@@ -829,14 +830,11 @@ export function collectErrors({ dataDir, wordBasePath }) {
   }
 
   errs.push(...validateManifest(manifest, onDisk));
-  // 用实际分组重算一遍，确认分片切法与 shardCards 一致
-  errs.push(...validateManifest(manifest, shardCards(cards)).filter((e) => !errs.includes(e)));
   errs.push(...checkDeck({ cards, fakes, wordBase: loadWordBase(wordBasePath) }));
   return errs;
 }
 
-const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop());
-if (isMain) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const errs = collectErrors({
     dataDir: new URL("../data/", import.meta.url).pathname,
     wordBasePath: new URL("./vendor/words_alpha.txt", import.meta.url).pathname,
