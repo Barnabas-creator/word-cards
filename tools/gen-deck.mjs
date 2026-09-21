@@ -5,6 +5,12 @@ import { generateCards } from "../lib/gen-runner.mjs";
 import { shardCards, buildManifest } from "../lib/shard.mjs";
 import { loadWordBase } from "../lib/wordbase.mjs";
 
+// fetch 的连接错误有时在请求结束之后才冒出来，成为未处理的 promise rejection。
+// Node 22 默认直接退进程——那会把这一轮已经生成的卡片全部丢掉。记下来，继续跑。
+process.on("unhandledRejection", (err) => {
+  console.error("\n⚠ 忽略一个未处理的异步错误：", String(err?.message ?? err).slice(0, 200));
+});
+
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) throw new Error("需要环境变量 GEMINI_API_KEY");
 

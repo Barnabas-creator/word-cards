@@ -179,3 +179,25 @@ test("stopOnError 不命中时照常跑完全部批次", async () => {
   assert.equal(stopped, false);
   assert.equal(cards.length, 2);
 });
+
+test("批次处理中的意外异常不会逃出 generateCards，已生成的卡片不丢", async () => {
+  const good = (w) => ({ w, ipa: "/x/", pos: "n.", zh: "啊", fam: [],
+    ex: "The nation voted for change last autumn without any real protest.",
+    exZh: "去年秋天全国投票支持变革。", conf: [], c: ["名词"] });
+  const reply = (items) => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(items) }] } }] });
+  let n = 0;
+  const callModel = async (body) => {
+    const ws = body.contents[0].parts[0].text.split("这批词：\n")[1].split("\n");
+    n++;
+    // 第二批返回一个畸形条目：w 不是字符串，下游取 .toLowerCase() 会抛
+    if (n === 2) return reply([{ ...good(ws[0]), w: 12345 }]);
+    return reply(ws.map(good));
+  };
+  const wordlist = [
+    { w: "a", lvl: "A1", src: "NGSL" }, { w: "b", lvl: "A1", src: "NGSL" },
+    { w: "c", lvl: "A1", src: "NGSL" },
+  ];
+  const { cards, failed } = await generateCards({ wordlist, callModel, batchSize: 1, maxRetries: 1 });
+  assert.deepEqual(cards.map((c) => c.w), ["a", "c"], "第一批和第三批的卡片必须保住");
+  assert.deepEqual(failed.map((f) => f.w), ["b"]);
+});
