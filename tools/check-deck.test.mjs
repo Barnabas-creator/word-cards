@@ -39,6 +39,28 @@ test("fam 成员出现在假词库报错", () => {
   assert.ok(errs.some((e) => /假词/.test(e)));
 });
 
+test("fam 成员是屈折形而非词典词报错", () => {
+  for (const bad of ["nationing", "nationes"]) {
+    const errs = checkDeck({ cards: [{ ...card, fam: [bad] }], fakes: [], wordBase });
+    assert.ok(errs.some((e) => new RegExp(`fam.*${bad}`).test(e)), `${bad} 应当被拒`);
+  }
+});
+
+test("fam 成员是词典里的派生词则通过", () => {
+  assert.deepEqual(checkDeck({ cards: [{ ...card, fam: ["national"] }], fakes: [], wordBase }), []);
+});
+
+test("conf 成员不是真词报错", () => {
+  const errs = checkDeck({ cards: [{ ...card, conf: ["natureness"] }], fakes: [], wordBase });
+  assert.ok(errs.some((e) => /conf.*natureness/.test(e)));
+});
+
+test("conf 成员出现在假词库报错", () => {
+  const errs = checkDeck({ cards: [{ ...card, conf: ["nature"] }],
+                           fakes: [{ w: "nature", kind: "morph", base: "nation" }], wordBase });
+  assert.ok(errs.some((e) => /conf 成员 nature 出现在假词库里/.test(e)));
+});
+
 test("假词其实是真词报错", () => {
   const errs = checkDeck({ cards: [], fakes: [{ w: "plant", kind: "morph", base: "plan" }], wordBase });
   assert.ok(errs.some((e) => /真词/.test(e)));
@@ -60,7 +82,7 @@ test("例句用派生形也算提到", () => {
 });
 
 test("中文释义过长报错", () => {
-  const longZh = "a".repeat(21);
+  const longZh = "国".repeat(21);
   assert.ok(checkDeck({ cards: [{ ...card, zh: longZh }], fakes: [], wordBase })
     .some((e) => /过长/.test(e)));
 });
