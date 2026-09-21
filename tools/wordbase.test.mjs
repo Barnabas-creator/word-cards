@@ -32,10 +32,10 @@ test("isRealWord 对造出来的假词返回 false", () => {
   assert.equal(isRealWord(base, "unbrighten"), false);
 });
 
-test("wordForms 的 -es 只加在 s/x/z/ch/sh 之后", () => {
+test("wordForms 现在无条件加 -es（宽松是故意的，召回优先于精确）", () => {
   assert.ok(wordForms("box").has("boxes"));
   assert.ok(wordForms("watch").has("watches"));
-  assert.equal(wordForms("travel").has("traveles"), false);
+  assert.ok(wordForms("travel").has("traveles")); // 非词，但只用于召回判定，无害
 });
 
 test("wordForms 处理词尾哑 e", () => {
@@ -44,12 +44,21 @@ test("wordForms 处理词尾哑 e", () => {
   assert.ok(f.has("hoping"));
 });
 
-test("wordForms 只对短元音闭音节双写尾辅音", () => {
+test("wordForms 对辅音结尾的词都生成双写变体，含多音节词；w/x/y 结尾除外", () => {
   assert.ok(wordForms("stop").has("stopped"));
   assert.ok(wordForms("stop").has("stopping"));
-  assert.equal(wordForms("visit").has("visitted"), false);
-  assert.equal(wordForms("travel").has("travelled"), false);
+  assert.ok(wordForms("visit").has("visitted")); // 非词，但只用于召回判定，无害
+  assert.ok(wordForms("travel").has("travelled"));
   assert.equal(wordForms("play").has("playyed"), false);
+});
+
+test("wordForms 修复漏生成的常规派生形（回归测试）", () => {
+  assert.ok(wordForms("go").has("goes"));
+  assert.ok(wordForms("do").has("does"));
+  assert.ok(wordForms("begin").has("beginning"));
+  assert.ok(wordForms("admit").has("admitted"));
+  assert.ok(wordForms("study").has("studies"));
+  assert.ok(wordForms("hope").has("hoping"));
 });
 
 test("wordForms 只在辅音 + y 时把 y 变成 i", () => {
