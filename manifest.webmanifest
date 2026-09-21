@@ -1,6 +1,6 @@
 {
-  "name": "英语单词卡",
-  "short_name": "单词卡",
+  "name": "老婆加油 · 英语单词卡",
+  "short_name": "老婆加油",
   "description": "多邻国英语测试备考：单词卡 + 真假词速判",
   "start_url": "./index.html",
   "scope": "./",
@@ -10,7 +10,17 @@
   "theme_color": "#EDF3FA",
   "lang": "zh-CN",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }
