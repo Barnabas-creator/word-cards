@@ -8,7 +8,9 @@ import { loadWordBase } from "../lib/wordbase.mjs";
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) throw new Error("需要环境变量 GEMINI_API_KEY");
 
-const MODEL = "gemini-2.5-flash";
+// 模型会被下线（gemini-2.5-flash 已对新用户关闭），所以允许用环境变量覆盖。
+// 可用列表：curl -H "x-goog-api-key: $GEMINI_API_KEY" https://generativelanguage.googleapis.com/v1beta/models
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const API = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 async function callModel(body) {
