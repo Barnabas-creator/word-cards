@@ -176,15 +176,33 @@ img{max-width:100%}
   </div>
 
   <div class="tabs" role="tablist">
-    <button role="tab" id="tab-deck" aria-selected="true">复习</button>
-    <button role="tab" id="tab-drill" aria-selected="false">真假词</button>
-    <button role="tab" id="tab-dict" aria-selected="false">查词</button>
+    <button role="tab" id="tab-dict" aria-selected="true">查词</button>
     <button role="tab" id="tab-cal" aria-selected="false">日历</button>
+    <button role="tab" id="tab-deck" aria-selected="false">复习</button>
+    <button role="tab" id="tab-drill" aria-selected="false">真假词</button>
     <button role="tab" id="tab-more" aria-selected="false">进度</button>
   </div>
 
+  <!-- ============ 查词 ============ -->
+  <section id="panel-dict">
+    <div class="search">
+      <input id="q" type="search" placeholder="输入一个英语单词" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button class="btn primary" id="qbtn">查</button>
+    </div>
+    <div id="dict-msg" class="note" style="border:0;padding-top:10px"></div>
+    <div id="dict-out"></div>
+  </section>
+
+  <!-- ============ 日历 ============ -->
+  <section id="panel-cal" hidden>
+    <div class="note" style="border:0;padding-top:0">
+      实心 = 当时真的调了 AI，描边 = 直接读的本地词库。点词可以再看一次。
+    </div>
+    <div id="cal-out"></div>
+  </section>
+
   <!-- ============ 今日复习 ============ -->
-  <section id="panel-deck">
+  <section id="panel-deck" hidden>
     <div class="meter">
       <span>今日</span>
       <span class="bar"><i id="deckbar"></i></span>
@@ -264,24 +282,6 @@ img{max-width:100%}
       </div>
       <button class="btn primary" id="again-drill">再来一轮</button>
     </div>
-  </section>
-
-  <!-- ============ 查词 ============ -->
-  <section id="panel-dict" hidden>
-    <div class="search">
-      <input id="q" type="search" placeholder="输入一个英语单词" autocapitalize="off" autocorrect="off" spellcheck="false">
-      <button class="btn primary" id="qbtn">查</button>
-    </div>
-    <div id="dict-msg" class="note" style="border:0;padding-top:10px"></div>
-    <div id="dict-out"></div>
-  </section>
-
-  <!-- ============ 日历 ============ -->
-  <section id="panel-cal" hidden>
-    <div class="note" style="border:0;padding-top:0">
-      实心 = 当时真的调了 AI，描边 = 直接读的本地词库。点词可以再看一次。
-    </div>
-    <div id="cal-out"></div>
   </section>
 
   <!-- ============ 进度 ============ -->
@@ -367,7 +367,11 @@ function dueCards(){
   const now = Date.now();
   return CARDS.filter((c) => inScope(c) && state(c.w) && state(c.w).box < 4 && state(c.w).due <= now);
 }
-function newCards(){ return CARDS.filter((c) => inScope(c) && !state(c.w)); }
+function newCards(){
+  const fresh = CARDS.filter((c) => inScope(c) && !state(c.w));
+  // 自己查过的生词排最前：那是她真正遇到、想记住的词，不该排在几百张卡之后
+  return [...fresh.filter((c) => c.src === "查词"), ...fresh.filter((c) => c.src !== "查词")];
+}
 function masteredCount(){ return CARDS.filter((c) => inScope(c) && state(c.w)?.box >= 4).length; }
 function learningCount(){ return CARDS.filter((c) => inScope(c) && state(c.w) && state(c.w).box < 4).length; }
 function boxCount(b){ return CARDS.filter((c) => inScope(c) && state(c.w)?.box === b).length; }
@@ -706,13 +710,12 @@ function pairHtml(p){
   if (!p) return "";
   return `<div class="pair"><div class="t">${p.t}</div><div class="zh">${p.zh}</div></div>`;
 }
-function renderEntry(d, source){
+function renderEntry(d, source, added = false){
   if (d.notFound){
     $("dict-out").innerHTML = `<div class="entry"><div class="core">查不到这个词</div>
       <div class="pair zh">${d.reason || "请检查拼写"}</div></div>`;
     return;
   }
-  const inDeck = CARDS.some((c) => c.w.toLowerCase() === String(d.w).toLowerCase());
   $("dict-out").innerHTML = `
     <div class="entry">
       <div>
@@ -727,14 +730,15 @@ function renderEntry(d, source){
       ${d.fam?.length ? `<div class="row"><div class="rowlabel">词族</div>${
         d.fam.map((f) => `<div class="der"><span class="dw">${f.w}</span> <span class="dipa">${f.ipa||""}</span>
           <div class="pair zh">${f.zh||""}</div>${pairHtml(f.phrase)}${pairHtml(f.example)}</div>`).join("")}</div>` : ""}
-      <div class="src-badge">${source}</div>
-      ${inDeck ? "" : `<button class="btn primary" id="tocard">加入牌组</button>`}
+      <div class="src-badge">${source}${added ? " · 已加入牌组，会进入复习队列" : ""}</div>
     </div>`;
-  if (!inDeck) $("tocard").addEventListener("click", () => addToDeck(d));
 }
 
 const LS_EXTRA = "wc.extra.v1";
+// 查到的词自动进牌组：已经在库里的就跳过，返回是否新加了一张
 function addToDeck(d){
+  if (d.notFound || !d.w) return false;
+  if (CARDS.some((c) => c.w.toLowerCase() === String(d.w).toLowerCase())) return false;
   const card = {
     w: d.w, ipa: d.ipa, pos: d.pos, zh: d.core,
     fam: (d.fam || []).map((f) => f.w).filter((x) => x.toLowerCase() !== d.w.toLowerCase()).slice(0, 4),
@@ -746,8 +750,7 @@ function addToDeck(d){
   lsSet(LS_EXTRA, extra);
   CARDS.push(card);
   buildQueue();
-  $("tocard").textContent = "已加入牌组";
-  $("tocard").disabled = true;
+  return true;
 }
 
 async function lookup(word){
@@ -759,20 +762,20 @@ async function lookup(word){
     const cached = lexicon[w];
     if (cached){
       recordHit(w, cached.data, false);
-      renderEntry(cached.data, "读自本地词库");
+      renderEntry(cached.data, "读自本地词库", addToDeck(cached.data));
       $("dict-msg").textContent = "";
       return;
     }
     const deck = fromDeck(w);
     if (deck){
       recordHit(w, deck, false);
-      renderEntry(deck, "读自已有卡片");
+      renderEntry(deck, "读自已有卡片");   // 本来就在牌组里，不必再加
       $("dict-msg").textContent = "";
       return;
     }
     const data = await askGemini(w, (msg) => { $("dict-msg").textContent = msg; });
     recordHit(w, data, true);
-    renderEntry(data, "AI 生成");
+    renderEntry(data, "AI 生成", addToDeck(data));
     $("dict-msg").textContent = "";
   } catch (err){
     $("dict-msg").textContent = String(err.message || err);
@@ -876,6 +879,8 @@ loadData().then(() => {
   buildQueue();
   renderCard();
   updateToday();
+  selectTab("dict");
+  $("q").focus();
 }).catch((err) => {
   $("today").textContent = "词库加载失败";
   $("deck-empty").hidden = false;
