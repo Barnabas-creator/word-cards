@@ -1,6 +1,6 @@
 // 离线缓存：应用外壳用 stale-while-revalidate，词库分片用 network-first，
 // 这样新生成的卡片一上线就能拿到，断网时仍有上次缓存可用。
-const VERSION = "wc-v4";
+const VERSION = "wc-v5";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {

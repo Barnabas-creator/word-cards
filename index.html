@@ -317,6 +317,7 @@ img{max-width:100%}
         在 aistudio.google.com/apikey 免费申请，不用绑卡。只存在这台设备上，不会上传。
       </span>
     </div>
+    <div class="setting"><span>跨设备同步</span><span id="sync-state" style="font-size:12px;color:var(--ink-3)">—</span></div>
     <div class="setting"><span>清空学习进度</span><button class="danger" id="reset">清空</button></div>
 
     <p class="note" id="libnote"></p>
@@ -400,8 +401,10 @@ function grade(word, remembered){
   }
   p.due = p.box >= 4 ? Infinity : Date.now() + BOX_DAYS[p.box] * DAY;
   if (p.due === Infinity) p.due = 8.64e15;
+  p.at = Date.now();                       // 合并时按这个取较新的一条
   progress[word] = p;
   saveProgress();
+  scheduleSync();
 }
 
 /* ===================== 卡片界面 ===================== */
@@ -595,7 +598,7 @@ function logDay(field, value){
   const d = daylog[k] ?? { cards: 0, drills: 0, accSum: 0, accN: 0 };
   if (field === "card") d.cards++;
   if (field === "drill"){ d.drills++; d.accSum += value; d.accN++; }
-  daylog[k] = d; saveDaylog();
+  daylog[k] = d; saveDaylog(); scheduleSync();
 }
 
 const DICT_PROMPT = `你是一个专业的英语—中文双语词典助手，服务对象是备考 Duolingo English Test 的中文母语学习者。
@@ -703,7 +706,7 @@ function recordHit(word, data, ai){
   const e = lexicon[w] ?? { data, hits: [] };
   e.data = data;
   e.hits.push({ at: Date.now(), ai });
-  lexicon[w] = e; saveLexicon();
+  lexicon[w] = e; saveLexicon(); scheduleSync();
 }
 
 function pairHtml(p){
@@ -750,6 +753,7 @@ function addToDeck(d){
   lsSet(LS_EXTRA, extra);
   CARDS.push(card);
   buildQueue();
+  scheduleSync();
   return true;
 }
 
@@ -819,6 +823,131 @@ function renderCalendar(){
   }
 }
 
+/* ===================== 跨设备同步 =====================
+   只有一个使用者，所以不做同步码：所有设备读写同一份文档。
+   代价是站点公开，文档路径在源码里可见 —— 别人理论上能读写这份进度。
+   学习进度不算敏感，所以接受；但 Gemini 密钥绝不同步，那个泄露是真损失。 */
+const SYNC = {
+  key: "AIzaSyDqL_KE6biXwcf_5KZ1i8xj3SCuZRXWppo",
+  project: "kartu-kosakata",
+  doc: "english-rebecca-8a7e982b9bba",
+};
+const SYNC_URL = `https://firestore.googleapis.com/v1/projects/${SYNC.project}/databases/(default)/documents/progress/${SYNC.doc}?key=${SYNC.key}`;
+let syncing = false, syncTimer = null;
+
+function setSyncState(text){
+  const el = $("sync-state");
+  if (el) el.textContent = text;
+}
+
+// 合并：逐词取更新时间较新的一条，其余集合取并集
+function mergeProgress(local, remote){
+  const out = { ...remote };
+  for (const [w, p] of Object.entries(local)){
+    const r = out[w];
+    if (!r || (p.at ?? 0) >= (r.at ?? 0)) out[w] = p;
+  }
+  return out;
+}
+function mergeDaylog(local, remote){
+  const out = { ...remote };
+  for (const [k, d] of Object.entries(local)){
+    const r = out[k];
+    out[k] = r ? {
+      cards: Math.max(d.cards ?? 0, r.cards ?? 0),
+      drills: Math.max(d.drills ?? 0, r.drills ?? 0),
+      accSum: Math.max(d.accSum ?? 0, r.accSum ?? 0),
+      accN: Math.max(d.accN ?? 0, r.accN ?? 0),
+    } : d;
+  }
+  return out;
+}
+function mergeLexicon(local, remote){
+  const out = { ...remote };
+  for (const [w, e] of Object.entries(local)){
+    const r = out[w];
+    if (!r){ out[w] = e; continue; }
+    const seen = new Set();
+    const hits = [...(r.hits ?? []), ...(e.hits ?? [])]
+      .filter((h) => (seen.has(h.at) ? false : seen.add(h.at)))
+      .sort((a, b) => a.at - b.at);
+    out[w] = { data: e.data ?? r.data, hits };
+  }
+  return out;
+}
+function mergeExtra(local, remote){
+  const out = [...remote];
+  for (const c of local) if (!out.some((x) => x.w.toLowerCase() === c.w.toLowerCase())) out.push(c);
+  return out;
+}
+
+async function pullRemote({ quiet = false } = {}){
+  if (!navigator.onLine) { if (!quiet) setSyncState("离线，用的是本机进度"); return false; }
+  try {
+    const res = await fetch(SYNC_URL, { cache: "no-store" });
+    if (res.status === 404) return true;              // 还没建过，等第一次上传
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    const raw = (name) => {
+      const v = j?.fields?.[name]?.stringValue;
+      try { return v ? JSON.parse(v) : null; } catch { return null; }
+    };
+    const rp = raw("progress"), rl = raw("lexicon"), rd = raw("daylog"), re = raw("extra");
+    if (rp) progress = mergeProgress(progress, rp);
+    if (rl) lexicon  = mergeLexicon(lexicon, rl);
+    if (rd) daylog   = mergeDaylog(daylog, rd);
+    if (re){
+      const merged = mergeExtra(lsGet(LS_EXTRA, []), re);
+      lsSet(LS_EXTRA, merged);
+      for (const c of merged) if (!CARDS.some((x) => x.w.toLowerCase() === c.w.toLowerCase())) CARDS.push(c);
+    }
+    saveProgress(); saveLexicon(); saveDaylog();
+    return true;
+  } catch (err){
+    if (!quiet) setSyncState("同步失败，用的是本机进度");
+    return false;
+  }
+}
+
+async function pushLocal(){
+  if (!navigator.onLine) return;
+  const body = { fields: {
+    progress: { stringValue: JSON.stringify(progress) },
+    lexicon:  { stringValue: JSON.stringify(lexicon) },
+    daylog:   { stringValue: JSON.stringify(daylog) },
+    extra:    { stringValue: JSON.stringify(lsGet(LS_EXTRA, [])) },
+    at:       { stringValue: new Date().toISOString() },
+  } };
+  try {
+    const res = await fetch(SYNC_URL, {
+      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    setSyncState(res.ok ? `已同步 ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}` : "同步失败");
+  } catch { setSyncState("同步失败，用的是本机进度"); }
+}
+
+// 本地一有改动就排一次上传，2 秒内的连续改动合并成一次
+function scheduleSync(){
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(pushLocal, 2000);
+}
+
+// 先拉远端合并，再把合并结果推回去，然后刷新界面
+async function syncNow({ quiet = false } = {}){
+  if (syncing) return;
+  syncing = true;
+  if (!quiet) setSyncState("同步中…");
+  const ok = await pullRemote({ quiet });
+  if (ok) await pushLocal();
+  syncing = false;
+  buildQueue(); renderCard(); updateToday();
+  if (!$("panel-more").hidden) renderStats();
+  if (!$("panel-cal").hidden) renderCalendar();
+}
+
+document.addEventListener("visibilitychange", () => { if (!document.hidden) syncNow({ quiet: true }); });
+window.addEventListener("online", () => syncNow({ quiet: true }));
+setInterval(() => { if (!document.hidden) syncNow({ quiet: true }); }, 60000);
+
 /* ===================== 进度页 ===================== */
 function renderStats(){
   $("s-new").textContent = newCards().length;
@@ -842,7 +971,7 @@ $("set-limit").addEventListener("change", (e) => { settings.limit = Number(e.tar
 $("set-key").addEventListener("change", (e) => { settings.key = e.target.value.trim(); saveSettings(); });
 $("reset").addEventListener("click", () => {
   if (!confirm("清空全部学习进度？这一步不能撤销。")) return;
-  progress = {}; saveProgress(); extraNew = 0; buildQueue(); renderCard(); renderStats();
+  progress = {}; saveProgress(); pushLocal(); extraNew = 0; buildQueue(); renderCard(); renderStats();
 });
 
 /* ===================== 标签页 ===================== */
@@ -881,6 +1010,7 @@ loadData().then(() => {
   updateToday();
   selectTab("dict");
   $("q").focus();
+  syncNow();
 }).catch((err) => {
   $("today").textContent = "词库加载失败";
   $("deck-empty").hidden = false;
