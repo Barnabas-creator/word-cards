@@ -1822,3 +1822,52 @@ git commit -m "$(printf 'feat: 全量生成 4064 条真词卡与分片 manifest\
 
 应用层（`index.html`、Leitner 调度、假词速判、查词与日历迁移、PWA 收尾）在本计划完成后另写，
 届时分片的真实体积已知，加载策略可以按实测定。
+
+---
+
+## 实施后的架构偏离
+
+以下改动发生在全部 11 个任务实施之后的整支代码审查阶段，代码以仓库为准，本节说明偏离原因。
+
+### 1. 生成器与校验门共用同一套逐卡规则
+
+**原计划**：`gen-runner` 只用 `validateCard` 校验生成结果，内容规则（例句词数、例句是否提到词头、`zh` 规则、`fam` 真伪）只在 `checkDeck` 里。
+
+**问题**：真实运行会先烧掉约 200 次 API 调用、报告「失败 0」、写完分片，然后才被闸门拒绝成百上千张卡——而这些词不在 `failed.json` 里，计划 Task 11 Step 4 的「把失败的词重跑」无法执行。
+
+**现状**：逐卡内容规则抽到 `lib/card-content.mjs` 的 `checkCardContent(card, { wordBase, where })`，`checkDeck` 与 `gen-runner` 共用。`generateCards` 新增可选 `wordBase` 参数，`tools/gen-deck.mjs` 无条件传入。跨卡片、跨库的检查仍留在 `checkDeck`。
+
+### 2. 屈折规则归一到 `lib/inflect.mjs`
+
+**原计划**：`isRealWord`（剥后缀，宽松）在 `lib/wordbase.mjs`，`wordForms`（生成形）在 `lib/check-deck.mjs`，两份各自编码英语屈折，且已分叉。
+
+**现状**：两者都搬进 `lib/inflect.mjs`。`lib/wordbase.mjs` 只保留 `loadWordBase` 与新增的 `isExactWord`。
+
+两个函数的松紧方向**相反**，这是关键：
+
+- `isRealWord` 服务**假词生成**——判真越宽，被拒的候选越多，宁可少造，安全方向。保持宽松。
+- `wordForms` 服务**例句召回**（`exMentions`）——多生成无害（非词不会出现在英语例句里），少生成就是误杀合法卡片。保持宽松。
+
+审查期间曾一度收紧 `wordForms`，导致 `go` 生不出 `goes`、`begin` 生不出 `beginning`，词表中 23 个高频词的正常例句会被误判。已回退为过度生成。
+
+### 3. `fam` / `conf` 判真改用精确查表
+
+词族成员和易混词本来就该是词典里的正经派生词（`national` / `nationality` / `internationalize`），不是屈折形。用宽松的 `isRealWord` 判它们会放过 `nationing`、`nationes` 这类模型编造的形。改用 `isExactWord`（严格查 370k 词基）。
+
+`conf` 在原计划里**全程没有校验**——既没查真伪，也没查是否落在假词库里（那意味着卡片可能让学习者记住一个速判模式正在教她判「假」的词）。现已与 `fam` 同等对待。
+
+### 4. 闸门核查覆盖率
+
+原计划的 `check-data.mjs` 从不读 `data/wordlist.json`，只核对 manifest 与实际写出的分片是否自洽。半途断掉的生成少写两千张卡也能退 0。现已加三向核查：词表有词无卡、卡不在词表、`lvl`/`src` 不符。
+
+### 5. 重试加指数退避
+
+原计划的重试没有间隔，一次 429 会在毫秒内烧光两次尝试、把整批 20 个词打进 `failed.json`。现为 1s / 2s，封顶 8s，`sleep` 可注入以保证测试瞬时完成。
+
+### 6. `--lvl=` 局部重跑合并而非覆盖
+
+计划 Task 11 Step 1 本身就是 `--lvl=A1` 的局部跑，而原实现会整体覆盖 `manifest.json` 与 `failed.json`。现由 `lib/shard.mjs` 的 `mergeManifest` 合并：同名条目覆盖、未重跑条目保留、按等级排序、`total` 重算；`failed.json` 先剔除本次等级范围的旧条目再追加。逐级跑与一次全量跑收敛到等价结果。
+
+### 7. 假词生成固定种子
+
+`tools/gen-fakewords.mjs` 原本不传 `rng`，产物不可复现。现固定种子 `20260920`，重跑字节一致。
