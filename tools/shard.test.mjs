@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { shardName, shardCards, buildManifest, validateManifest } from "../lib/shard.mjs";
+import { shardName, shardCards, buildManifest, validateManifest, mergeManifest } from "../lib/shard.mjs";
 
 const mk = (w, lvl) => ({ w, lvl });
 
@@ -43,4 +43,23 @@ test("validateManifest 抓分片文件缺失", () => {
 test("合法 manifest 零错误", () => {
   const shards = shardCards([mk("a", "A1"), mk("c", "B1")]);
   assert.deepEqual(validateManifest(buildManifest(shards, "v1"), shards), []);
+});
+
+test("mergeManifest 保留未重跑的分片条目", () => {
+  const prev = {
+    version: "v1", total: 5,
+    shards: [{ file: "deck-a1.json", lvl: "A1", count: 2 }, { file: "deck-b1.json", lvl: "B1", count: 3 }],
+  };
+  const shards = shardCards([mk("x", "B1"), mk("y", "B1"), mk("z", "B1"), mk("q", "B1")]);
+  const out = mergeManifest(prev, shards, "v1");
+  assert.deepEqual(out.shards, [
+    { file: "deck-a1.json", lvl: "A1", count: 2 },
+    { file: "deck-b1.json", lvl: "B1", count: 4 },
+  ]);
+  assert.equal(out.total, 6);
+});
+
+test("mergeManifest 在没有旧 manifest 时等价于 buildManifest", () => {
+  const shards = shardCards([mk("x", "A1")]);
+  assert.deepEqual(mergeManifest({ shards: [] }, shards, "v1"), buildManifest(shards, "v1"));
 });

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { affixCandidates, morphCandidates, comboCandidates, generateFakes } from "../lib/fake-gen.mjs";
+import { affixCandidates, morphCandidates, comboCandidates, generateFakes, mulberry32 } from "../lib/fake-gen.mjs";
 
 test("affixCandidates 挂常见词缀", () => {
   const out = affixCandidates("book");
@@ -65,7 +65,8 @@ test("morphCandidates 从不产生非法的词首辅音群", () => {
 });
 
 test("morphCandidates 从不产生非法的词尾辅音群", () => {
-  const out = morphCandidates("noise");
+  // noisy 才是当初造出 noisb 的那个基词：noise 以元音结尾，这个候选根本不可达
+  const out = morphCandidates("noisy");
   assert.ok(!out.includes("noisb"), "noisb should not be in results");
 });
 
@@ -79,12 +80,4 @@ test("comboCandidates 跳过已有派生词缀的基词", () => {
   assert.equal(out.length, 0, "intention ends with -tion, should produce no candidates");
 });
 
-function mulberry(seed) {
-  let a = seed;
-  return () => {
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+const mulberry = mulberry32;
