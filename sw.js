@@ -1,6 +1,10 @@
-// 离线缓存：应用外壳用 stale-while-revalidate，词库分片用 network-first，
-// 这样新生成的卡片一上线就能拿到，断网时仍有上次缓存可用。
-const VERSION = "wc-v5";
+// 缓存策略：一律「先联网，失败才用缓存」。
+//
+// 之前外壳走的是 cached-first，结果是新版本永远要等下一次打开才生效——
+// 用户刷新了却还是旧页面，同步功能上线了却没人拿得到。
+// 对这个应用来说，离线可用是底线，但「在线时拿到最新」优先级更高：
+// 词库天天在长，功能也在改。
+const VERSION = "wc-v6";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -18,18 +22,20 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
-  if (url.origin !== self.location.origin) return;   // 字体等跨域资源交给浏览器自己处理
+  if (url.origin !== self.location.origin) return;   // 字体、Firestore 等跨域请求不拦
 
-  const isData = url.pathname.includes("/data/");
-
-  e.respondWith(
-    caches.open(VERSION).then(async (cache) => {
-      const cached = await cache.match(e.request);
-      const fetching = fetch(e.request)
-        .then((res) => { if (res && res.ok) cache.put(e.request, res.clone()); return res; })
-        .catch(() => null);
-      if (isData) return (await fetching) || cached || new Response("[]", { headers: { "content-type": "application/json" } });
-      return cached || (await fetching) || new Response("离线且无缓存", { status: 503 });
-    })
-  );
+  e.respondWith((async () => {
+    const cache = await caches.open(VERSION);
+    try {
+      const res = await fetch(e.request, { cache: "no-store" });
+      if (res && res.ok) cache.put(e.request, res.clone());
+      return res;
+    } catch {
+      const cached = await cache.match(e.request) || await cache.match("./index.html");
+      return cached || new Response("离线且无缓存", { status: 503 });
+    }
+  })());
 });
+
+// 页面可以主动要求跳过等待，立刻接管
+self.addEventListener("message", (e) => { if (e.data === "skip-waiting") self.skipWaiting(); });
