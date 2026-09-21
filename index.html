@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#EDF3FA">
+<title>英语单词卡</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Source+Sans+3:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --paper:#EDF3FA; --surface:#FFFFFF; --surface-2:#DEE9F5;
+  --ink:#17293C; --ink-2:#4C6580; --ink-3:#8098B0; --line:#CBDCEC;
+  --accent:#3D7BB0; --accent-soft:#DCEAF7;
+  --real:#3D7BB0; --fake:#B06A72; --warn:#B99154; --ok:#4F8A6B;
+  --shadow:0 1px 2px rgba(23,41,60,.05), 0 10px 26px -14px rgba(23,41,60,.28);
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#101922; --surface:#18242F; --surface-2:#22313F;
+    --ink:#DEE9F3; --ink-2:#9DB4C8; --ink-3:#6F8599; --line:#2C3D4D;
+    --accent:#8FBEE4; --accent-soft:#1B3242;
+    --real:#8FBEE4; --fake:#DBA0A6; --warn:#D4B27C; --ok:#8BC5A3;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 12px 30px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#101922; --surface:#18242F; --surface-2:#22313F;
+  --ink:#DEE9F3; --ink-2:#9DB4C8; --ink-3:#6F8599; --line:#2C3D4D;
+  --accent:#8FBEE4; --accent-soft:#1B3242;
+  --real:#8FBEE4; --fake:#DBA0A6; --warn:#D4B27C; --ok:#8BC5A3;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 12px 30px -16px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"Source Sans 3","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+img{max-width:100%}
+[hidden]{display:none!important}
+.wrap{width:100%;max-width:460px;margin:0 auto;padding-inline:16px;padding-block:16px 28px;
+  display:flex;flex-direction:column;gap:14px;min-height:100%}
+
+.masthead{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.masthead h1{font-family:"Newsreader",Georgia,serif;font-weight:600;font-size:20px;margin:0}
+.today{font-size:11.5px;color:var(--ink-3);text-align:right;line-height:1.35;font-variant-numeric:tabular-nums}
+.today b{color:var(--ink-2);font-weight:600}
+
+.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:var(--surface-2);border-radius:11px;padding:4px}
+.tabs button{font:inherit;font-weight:600;font-size:13px;border:0;border-radius:8px;padding:8px 4px;
+  cursor:pointer;background:transparent;color:var(--ink-2)}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.meter{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--ink-3)}
+.meter .bar{flex:1;height:5px;border-radius:99px;background:var(--surface-2);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s ease}
+.meter .count{font-variant-numeric:tabular-nums}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:20px 18px;display:flex;flex-direction:column;gap:13px;
+  min-height:330px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.card:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 7px;border-radius:5px;background:var(--surface-2);color:var(--ink-2)}
+.chip.lvl{background:var(--accent-soft);color:var(--accent)}
+.chip.box{background:transparent;border:1px solid var(--line);color:var(--ink-3)}
+.headword{font-family:"Newsreader",Georgia,serif;font-size:36px;font-weight:500;line-height:1.1;
+  margin:0;text-wrap:balance;letter-spacing:-.01em;word-break:break-word}
+.ipa{font-family:"Newsreader",Georgia,serif;font-style:italic;color:var(--ink-2);font-size:17px}
+.pos{color:var(--ink-3);font-size:13px}
+.hint{margin-top:auto;font-size:12px;color:var(--ink-3)}
+.back{display:none;flex-direction:column;gap:13px}
+.card.flipped .front{display:none}
+.card.flipped .back{display:flex}
+.gloss{font-size:19px;font-weight:600}
+.row{border-top:1px solid var(--line);padding-top:10px}
+.rowlabel{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px}
+.fam{display:flex;flex-wrap:wrap;gap:6px}
+.fam span{font-family:"Newsreader",Georgia,serif;font-size:15px;background:var(--surface-2);border-radius:6px;padding:2px 8px}
+.ex{font-family:"Newsreader",Georgia,serif;font-size:16px;line-height:1.5}
+.ex b{font-weight:600;color:var(--accent);font-style:normal}
+.exzh{font-size:13.5px;color:var(--ink-2);margin-top:3px}
+.conf{display:flex;flex-wrap:wrap;gap:8px;font-family:"Newsreader",Georgia,serif;font-size:15px;color:var(--ink-2)}
+
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn{font:inherit;font-weight:600;font-size:14px;border:1px solid var(--line);background:var(--surface);
+  color:var(--ink);border-radius:10px;padding:12px 10px;cursor:pointer}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] .btn.primary,:root:not([data-theme="light"]) .btn.primary{color:#0E1C27}
+.btn.wide{grid-column:1 / -1}
+
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+  padding:28px 18px;text-align:center;color:var(--ink-2);display:flex;flex-direction:column;gap:10px}
+.empty .big{font-family:"Newsreader",Georgia,serif;font-size:26px;color:var(--ink)}
+
+.timerbar{height:4px;border-radius:99px;background:var(--surface-2);overflow:hidden}
+.timerbar i{display:block;height:100%;background:var(--warn);width:100%}
+.probe{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+  min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  padding:22px 16px;text-align:center}
+.probe .word{font-family:"Newsreader",Georgia,serif;font-size:32px;font-weight:500;word-break:break-word}
+.probe .verdict{font-size:13px;font-weight:600;min-height:20px}
+.verdict.ok{color:var(--ok)}
+.verdict.no{color:var(--fake)}
+.judge{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.judge .btn{padding:15px 10px;font-size:15px}
+.judge .fakebtn{border-color:var(--fake);color:var(--fake)}
+.judge .realbtn{border-color:var(--real);color:var(--real)}
+.tally{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+
+.report{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:18px;display:flex;flex-direction:column;gap:12px}
+.score{font-family:"Newsreader",Georgia,serif;font-size:32px;font-weight:600}
+.score small{font-size:14px;color:var(--ink-3);font-weight:400;font-family:"Source Sans 3",sans-serif}
+.breakdown{display:flex;flex-direction:column;gap:7px}
+.brow{display:grid;grid-template-columns:78px 1fr 34px;align-items:center;gap:8px;font-size:12.5px}
+.brow .track{height:6px;background:var(--surface-2);border-radius:99px;overflow:hidden}
+.brow .track i{display:block;height:100%;background:var(--fake)}
+.brow .n{text-align:right;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.misses{font-size:13px;color:var(--ink-2);line-height:1.8}
+.misses b{font-family:"Newsreader",Georgia,serif;font-weight:500;color:var(--ink)}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 10px;text-align:center}
+.tile .n{font-family:"Newsreader",Georgia,serif;font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+.tile .l{font-size:11px;color:var(--ink-3)}
+.setting{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  border-top:1px solid var(--line);padding-top:12px;font-size:13.5px}
+.setting input[type=number]{font:inherit;width:74px;padding:7px 9px;border:1px solid var(--line);
+  border-radius:8px;background:var(--surface);color:var(--ink);text-align:right}
+.setting select{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;
+  background:var(--surface);color:var(--ink)}
+.danger{color:var(--fake);background:none;border:0;font:inherit;cursor:pointer;padding:0;text-decoration:underline}
+.note{font-size:11.5px;color:var(--ink-3);line-height:1.6;border-top:1px solid var(--line);padding-top:12px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="masthead">
+    <h1>英语单词卡</h1>
+    <div class="today" id="today">加载中…</div>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-deck" aria-selected="true">今日复习</button>
+    <button role="tab" id="tab-drill" aria-selected="false">真假词</button>
+    <button role="tab" id="tab-more" aria-selected="false">进度</button>
+  </div>
+
+  <!-- ============ 今日复习 ============ -->
+  <section id="panel-deck">
+    <div class="meter">
+      <span>今日</span>
+      <span class="bar"><i id="deckbar"></i></span>
+      <span class="count" id="deckcount">—</span>
+    </div>
+
+    <div class="card" id="card" tabindex="0" role="button" aria-label="点击翻面" hidden>
+      <div class="front">
+        <div class="chips" id="f-chips"></div>
+        <h2 class="headword" id="f-word"></h2>
+        <div class="ipa" id="f-ipa"></div>
+        <div class="pos" id="f-pos"></div>
+        <div class="hint">点一下翻面</div>
+      </div>
+      <div class="back">
+        <div class="chips" id="b-chips"></div>
+        <h2 class="headword" id="b-word" style="font-size:26px"></h2>
+        <div class="gloss" id="b-zh"></div>
+        <div class="row" id="b-famrow">
+          <div class="rowlabel">词族</div>
+          <div class="fam" id="b-fam"></div>
+        </div>
+        <div class="row">
+          <div class="rowlabel">例句</div>
+          <div class="ex" id="b-ex"></div>
+          <div class="exzh" id="b-exzh"></div>
+        </div>
+        <div class="row" id="b-confrow">
+          <div class="rowlabel">易混</div>
+          <div class="conf" id="b-conf"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="empty" id="deck-empty" hidden>
+      <div class="big" id="empty-big">今日已完成</div>
+      <div id="empty-sub"></div>
+      <button class="btn" id="study-more" hidden>再多背 20 个新词</button>
+    </div>
+
+    <div class="controls" id="deck-controls" style="margin-top:12px" hidden>
+      <button class="btn" id="again">忘了</button>
+      <button class="btn primary" id="known">记住了</button>
+    </div>
+  </section>
+
+  <!-- ============ 真假词 ============ -->
+  <section id="panel-drill" hidden>
+    <div id="drill-live">
+      <div class="timerbar"><i id="timer"></i></div>
+      <div class="probe" style="margin-top:14px">
+        <div class="word" id="probe-word">—</div>
+        <div class="verdict" id="verdict"></div>
+      </div>
+      <div class="judge" style="margin-top:14px">
+        <button class="btn fakebtn" id="btn-fake">假词</button>
+        <button class="btn realbtn" id="btn-real">真词</button>
+      </div>
+      <div class="tally" style="margin-top:10px">
+        <span id="tally-pos">—</span>
+        <span id="tally-acc">正确率 —</span>
+      </div>
+    </div>
+
+    <div class="report" id="drill-report" hidden>
+      <div>
+        <div class="score" id="r-acc">—<small> 正确率</small></div>
+        <div style="font-size:12.5px;color:var(--ink-3)" id="r-time"></div>
+      </div>
+      <div>
+        <div class="rowlabel">错因分布</div>
+        <div class="breakdown" id="r-breakdown"></div>
+      </div>
+      <div>
+        <div class="rowlabel">错的词</div>
+        <div class="misses" id="r-misses"></div>
+      </div>
+      <button class="btn primary" id="again-drill">再来一轮</button>
+    </div>
+  </section>
+
+  <!-- ============ 进度 ============ -->
+  <section id="panel-more" hidden>
+    <div class="stats">
+      <div class="tile"><div class="n" id="s-new">—</div><div class="l">没学过</div></div>
+      <div class="tile"><div class="n" id="s-learning">—</div><div class="l">复习中</div></div>
+      <div class="tile"><div class="n" id="s-done">—</div><div class="l">已掌握</div></div>
+    </div>
+    <div class="stats" style="margin-top:8px">
+      <div class="tile"><div class="n" id="s-b1">—</div><div class="l">盒1 每天</div></div>
+      <div class="tile"><div class="n" id="s-b2">—</div><div class="l">盒2 隔天</div></div>
+      <div class="tile"><div class="n" id="s-b3">—</div><div class="l">盒3 四天</div></div>
+    </div>
+
+    <div class="setting"><span>每天新词</span><input type="number" id="set-daily" min="5" max="200" step="5"></div>
+    <div class="setting"><span>学习范围</span>
+      <select id="set-lvl"><option value="all">全部等级</option></select>
+    </div>
+    <div class="setting"><span>速判限时</span>
+      <select id="set-limit">
+        <option value="3000">3 秒</option>
+        <option value="5000">5 秒</option>
+        <option value="8000">8 秒</option>
+        <option value="0">不限时</option>
+      </select>
+    </div>
+    <div class="setting"><span>清空学习进度</span><button class="danger" id="reset">清空</button></div>
+
+    <p class="note" id="libnote"></p>
+  </section>
+</div>
+
+<script>
+/* ===================== 存储 ===================== */
+const LS_PROGRESS = "wc.progress.v1";
+const LS_SETTINGS = "wc.settings.v1";
+const DAY = 86400000;
+const BOX_DAYS = { 1: 1, 2: 2, 3: 4 };
+
+function lsGet(key, fallback){
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch { return fallback; }
+}
+function lsSet(key, value){
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+let progress = lsGet(LS_PROGRESS, {});           // { word: { box:1|2|3, due:ms, seen:n } }
+let settings = Object.assign({ daily: 50, lvl: "all", limit: 5000 }, lsGet(LS_SETTINGS, {}));
+const saveProgress = () => lsSet(LS_PROGRESS, progress);
+const saveSettings = () => lsSet(LS_SETTINGS, settings);
+
+/* ===================== 数据 ===================== */
+let CARDS = [], FAKES = [], LEVELS = [];
+const $ = (id) => document.getElementById(id);
+
+async function loadData(){
+  const manifest = await (await fetch("data/manifest.json", { cache: "no-cache" })).json();
+  const groups = await Promise.all(
+    manifest.shards.map((s) => fetch("data/" + s.file).then((r) => r.json()))
+  );
+  CARDS = groups.flat();
+  LEVELS = [...new Set(CARDS.map((c) => c.lvl))];
+  FAKES = await (await fetch("data/fakewords.json")).json();
+}
+
+/* ===================== Leitner ===================== */
+const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); };
+const inScope = (c) => settings.lvl === "all" || c.lvl === settings.lvl;
+
+function state(w){ return progress[w] ?? null; }
+function dueCards(){
+  const now = Date.now();
+  return CARDS.filter((c) => inScope(c) && state(c.w) && state(c.w).box < 4 && state(c.w).due <= now);
+}
+function newCards(){ return CARDS.filter((c) => inScope(c) && !state(c.w)); }
+function masteredCount(){ return CARDS.filter((c) => inScope(c) && state(c.w)?.box >= 4).length; }
+function learningCount(){ return CARDS.filter((c) => inScope(c) && state(c.w) && state(c.w).box < 4).length; }
+function boxCount(b){ return CARDS.filter((c) => inScope(c) && state(c.w)?.box === b).length; }
+
+let queue = [];
+let extraNew = 0;
+
+function buildQueue(){
+  const due = dueCards();
+  const fresh = newCards().slice(0, Math.max(0, settings.daily + extraNew - countStartedToday()));
+  queue = [...due, ...fresh];
+  return queue;
+}
+function countStartedToday(){
+  const t = today();
+  return Object.values(progress).filter((p) => p.started >= t).length;
+}
+
+function grade(word, remembered){
+  const p = progress[word] ?? { box: 1, seen: 0, started: Date.now() };
+  p.seen = (p.seen ?? 0) + 1;
+  if (remembered){
+    p.box = Math.min(4, (p.box ?? 1) + 1);   // 4 = 已掌握，不再出现
+  } else {
+    p.box = 1;
+  }
+  p.due = p.box >= 4 ? Infinity : Date.now() + BOX_DAYS[p.box] * DAY;
+  if (p.due === Infinity) p.due = 8.64e15;
+  progress[word] = p;
+  saveProgress();
+}
+
+/* ===================== 卡片界面 ===================== */
+let idx = 0;
+
+function chipHtml(c){
+  const st = state(c.w);
+  const boxChip = st ? `<span class="chip box">盒${Math.min(st.box,3)}</span>` : `<span class="chip box">新词</span>`;
+  return `<span class="chip lvl">${c.lvl}</span><span class="chip">${c.src}</span>` +
+         `<span class="chip">${(c.c || []).join("/")}</span>` + boxChip;
+}
+function markEx(c){
+  const stem = c.w.length > 4 ? c.w.slice(0, c.w.length - 2) : c.w;
+  try {
+    return c.ex.replace(new RegExp(`\\b(${stem}\\w*)`, "i"), "<b>$1</b>");
+  } catch { return c.ex; }
+}
+function renderCard(){
+  const q = queue;
+  $("deckcount").textContent = `${Math.max(0, q.length)} 待背`;
+  const total = Math.max(1, q.length + countStartedToday());
+  $("deckbar").style.width = `${(countStartedToday() / total) * 100}%`;
+
+  if (!q.length){
+    $("card").hidden = true;
+    $("deck-controls").hidden = true;
+    $("deck-empty").hidden = false;
+    const left = newCards().length;
+    $("empty-sub").textContent = left
+      ? `这个范围里还有 ${left} 个新词没学。`
+      : `这个范围里的词都学过了。`;
+    $("study-more").hidden = !left;
+    return;
+  }
+  $("deck-empty").hidden = true;
+  $("card").hidden = false;
+  $("deck-controls").hidden = false;
+
+  if (idx >= q.length) idx = 0;
+  const c = q[idx];
+  $("f-chips").innerHTML = chipHtml(c);
+  $("b-chips").innerHTML = chipHtml(c);
+  $("f-word").textContent = c.w;
+  $("b-word").textContent = c.w;
+  $("f-ipa").textContent = c.ipa;
+  $("f-pos").textContent = c.pos;
+  $("b-zh").textContent = c.zh;
+  $("b-famrow").hidden = !(c.fam && c.fam.length);
+  $("b-fam").innerHTML = (c.fam || []).map((f) => `<span>${f}</span>`).join("");
+  $("b-ex").innerHTML = markEx(c);
+  $("b-exzh").textContent = c.exZh;
+  $("b-confrow").hidden = !(c.conf && c.conf.length);
+  $("b-conf").innerHTML = (c.conf || []).map((x) => `<span>${x}</span>`).join("");
+  $("card").classList.remove("flipped");
+  updateToday();
+}
+function answerCard(remembered){
+  const c = queue[idx];
+  if (!c) return;
+  if (!progress[c.w]) progress[c.w] = { box: 1, seen: 0, started: Date.now() };
+  grade(c.w, remembered);
+  queue.splice(idx, 1);
+  if (!remembered) queue.push(c);          // 忘了的排到队尾，本轮再见一次
+  renderCard();
+}
+
+$("card").addEventListener("click", () => $("card").classList.toggle("flipped"));
+$("card").addEventListener("keydown", (e) => {
+  if (e.key === " " || e.key === "Enter"){ e.preventDefault(); $("card").classList.toggle("flipped"); }
+});
+$("known").addEventListener("click", () => answerCard(true));
+$("again").addEventListener("click", () => answerCard(false));
+$("study-more").addEventListener("click", () => { extraNew += 20; buildQueue(); renderCard(); });
+
+function updateToday(){
+  const done = countStartedToday();
+  $("today").innerHTML = `今日 <b>${done}</b> / ${settings.daily} 新词<br>已掌握 <b>${masteredCount()}</b> 词`;
+}
+
+/* ===================== 真假词速判 ===================== */
+const KIND_LABEL = { affix: "词缀错配", morph: "真词形变", combo: "非法组合" };
+let probes = [], pIdx = 0, correct = 0, answered = 0, timerId = null, startedAt = 0;
+let misses = [], times = [];
+
+function sample(arr, n){
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a.slice(0, n);
+}
+function buildProbes(){
+  const learned = CARDS.filter((c) => state(c.w));
+  const pool = learned.length >= 12 ? learned : CARDS;
+  const reals = sample(pool, 20).map((c) => ({ w: c.w, real: true }));
+  const fakes = sample(FAKES, 10).map((f) => ({ w: f.w, real: false, kind: f.kind, base: f.base }));
+  return sample([...reals, ...fakes], 30);
+}
+function startProbe(){
+  if (pIdx >= probes.length) return finishDrill();
+  const p = probes[pIdx];
+  $("probe-word").textContent = p.w;
+  $("verdict").textContent = "";
+  $("verdict").className = "verdict";
+  $("tally-pos").textContent = `第 ${pIdx + 1} / ${probes.length} 题`;
+  $("btn-fake").disabled = false; $("btn-real").disabled = false;
+  startedAt = performance.now();
+  const bar = $("timer");
+  clearTimeout(timerId);
+  if (settings.limit > 0){
+    bar.style.transition = "none"; bar.style.width = "100%";
+    requestAnimationFrame(() => { bar.style.transition = `width ${settings.limit}ms linear`; bar.style.width = "0%"; });
+    timerId = setTimeout(() => answerProbe(null), settings.limit);
+  } else {
+    bar.style.transition = "none"; bar.style.width = "100%";
+  }
+}
+function answerProbe(saidReal){
+  clearTimeout(timerId);
+  $("btn-fake").disabled = true; $("btn-real").disabled = true;
+  const p = probes[pIdx];
+  times.push(saidReal === null ? (settings.limit || 0) : performance.now() - startedAt);
+  const right = saidReal === p.real;
+  answered++;
+  if (right){
+    correct++;
+    $("verdict").textContent = p.real ? "✓ 真词" : `✓ 假词 · ${KIND_LABEL[p.kind]}`;
+    $("verdict").className = "verdict ok";
+  } else {
+    misses.push(p);
+    $("verdict").textContent = p.real
+      ? (saidReal === null ? "超时 · 这是真词" : "✗ 这是真词")
+      : `✗ 假词 · ${KIND_LABEL[p.kind]}（由 ${p.base} 造出）`;
+    $("verdict").className = "verdict no";
+  }
+  $("tally-acc").textContent = `正确率 ${Math.round((correct / answered) * 100)}%`;
+  $("timer").style.transition = "none"; $("timer").style.width = "0%";
+  pIdx++;
+  setTimeout(startProbe, right ? 600 : 1500);
+}
+function finishDrill(){
+  $("drill-live").hidden = true;
+  $("drill-report").hidden = false;
+  const acc = Math.round((correct / probes.length) * 100);
+  $("r-acc").innerHTML = `${acc}%<small> 正确率</small>`;
+  const avg = times.reduce((a, b) => a + b, 0) / times.length / 1000;
+  $("r-time").textContent = `平均反应 ${avg.toFixed(1)} 秒 · 共 ${probes.length} 题`;
+  const kinds = ["affix", "morph", "combo"];
+  const counts = Object.fromEntries(kinds.map((k) => [k, misses.filter((m) => m.kind === k).length]));
+  const realMiss = misses.filter((m) => m.real).length;
+  const max = Math.max(1, ...Object.values(counts), realMiss);
+  $("r-breakdown").innerHTML = kinds.map((k) => `
+    <div class="brow"><span>${KIND_LABEL[k]}</span>
+      <span class="track"><i style="width:${(counts[k]/max)*100}%"></i></span>
+      <span class="n">${counts[k]}</span></div>`).join("") +
+    `<div class="brow"><span>真词误判</span>
+      <span class="track"><i style="width:${(realMiss/max)*100}%"></i></span>
+      <span class="n">${realMiss}</span></div>`;
+  $("r-misses").innerHTML = misses.length
+    ? misses.map((m) => m.real
+        ? `<b>${m.w}</b> — 真词，被判成了假词`
+        : `<b>${m.w}</b> — 假词，${KIND_LABEL[m.kind]}，由 <b>${m.base}</b> 造出`).join("<br>")
+    : "全对。";
+}
+function resetDrill(){
+  probes = buildProbes(); pIdx = 0; correct = 0; answered = 0; misses = []; times = [];
+  $("drill-report").hidden = true; $("drill-live").hidden = false;
+  $("tally-acc").textContent = "正确率 —";
+  startProbe();
+}
+$("btn-fake").addEventListener("click", () => answerProbe(false));
+$("btn-real").addEventListener("click", () => answerProbe(true));
+$("again-drill").addEventListener("click", resetDrill);
+document.addEventListener("keydown", (e) => {
+  if ($("panel-drill").hidden) return;
+  if (e.key === "ArrowLeft" && !$("btn-fake").disabled) answerProbe(false);
+  if (e.key === "ArrowRight" && !$("btn-real").disabled) answerProbe(true);
+});
+
+/* ===================== 进度页 ===================== */
+function renderStats(){
+  $("s-new").textContent = newCards().length;
+  $("s-learning").textContent = learningCount();
+  $("s-done").textContent = masteredCount();
+  $("s-b1").textContent = boxCount(1);
+  $("s-b2").textContent = boxCount(2);
+  $("s-b3").textContent = boxCount(3);
+  $("libnote").innerHTML =
+    `词库：<b>${CARDS.length}</b> 张卡片，<b>${FAKES.length}</b> 条假词。` +
+    `词表来源 NGSL + NAWL（CC BY-SA）。卡片仍在陆续生成中，刷新页面就会更新。`;
+}
+$("set-daily").addEventListener("change", (e) => {
+  settings.daily = Math.max(5, Math.min(200, Number(e.target.value) || 50));
+  e.target.value = settings.daily; saveSettings(); buildQueue(); renderCard();
+});
+$("set-lvl").addEventListener("change", (e) => {
+  settings.lvl = e.target.value; saveSettings(); extraNew = 0; buildQueue(); renderCard(); renderStats();
+});
+$("set-limit").addEventListener("change", (e) => { settings.limit = Number(e.target.value); saveSettings(); });
+$("reset").addEventListener("click", () => {
+  if (!confirm("清空全部学习进度？这一步不能撤销。")) return;
+  progress = {}; saveProgress(); extraNew = 0; buildQueue(); renderCard(); renderStats();
+});
+
+/* ===================== 标签页 ===================== */
+let drillStarted = false;
+function selectTab(which){
+  for (const k of ["deck", "drill", "more"]){
+    $("tab-" + k).setAttribute("aria-selected", String(k === which));
+    $("panel-" + k).hidden = k !== which;
+  }
+  if (which === "drill" && !drillStarted){ drillStarted = true; resetDrill(); }
+  if (which !== "drill"){ clearTimeout(timerId); $("btn-fake").disabled = true; $("btn-real").disabled = true; }
+  if (which === "more") renderStats();
+  if (which === "deck"){ buildQueue(); renderCard(); }
+}
+$("tab-deck").addEventListener("click", () => selectTab("deck"));
+$("tab-drill").addEventListener("click", () => selectTab("drill"));
+$("tab-more").addEventListener("click", () => selectTab("more"));
+
+/* ===================== 启动 ===================== */
+loadData().then(() => {
+  $("set-daily").value = settings.daily;
+  $("set-limit").value = String(settings.limit);
+  const sel = $("set-lvl");
+  for (const l of LEVELS){
+    const o = document.createElement("option");
+    o.value = l; o.textContent = l + " 级";
+    sel.appendChild(o);
+  }
+  sel.value = settings.lvl;
+  buildQueue();
+  renderCard();
+  updateToday();
+}).catch((err) => {
+  $("today").textContent = "词库加载失败";
+  $("deck-empty").hidden = false;
+  $("empty-big").textContent = "词库加载失败";
+  $("empty-sub").textContent = String(err.message || err);
+});
+
+if ("serviceWorker" in navigator){
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+</script>
+</body>
+</html>

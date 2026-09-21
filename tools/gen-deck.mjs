@@ -57,8 +57,13 @@ const quotaExhausted = (err) =>
 
 const wordBase = loadWordBase(fileURLToPath(new URL("./vendor/words_alpha.txt", import.meta.url)));
 
+// 免费层按「请求数」限额，不按词数。批次越大，同样的配额能出越多卡片。
+// 但批次太大模型容易漏词，50 是实测过的折中。
+const batchArg = process.argv.find((a) => a.startsWith("--batch="));
+const batchSize = batchArg ? Number(batchArg.slice("--batch=".length)) : 20;
+
 const { cards, failed, stopped } = await generateCards({
-  wordlist, callModel, wordBase,
+  wordlist, callModel, wordBase, batchSize,
   stopOnError: quotaExhausted,
   onProgress: ({ done, failed }) => process.stdout.write(`\r已生成 ${done} / ${wordlist.length}，失败 ${failed}`),
 });
