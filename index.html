@@ -51,8 +51,8 @@ img{max-width:100%}
 .today{font-size:11.5px;color:var(--ink-3);text-align:right;line-height:1.35;font-variant-numeric:tabular-nums}
 .today b{color:var(--ink-2);font-weight:600}
 
-.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;background:var(--surface-2);border-radius:11px;padding:4px}
-.tabs button{font:inherit;font-weight:600;font-size:13px;border:0;border-radius:8px;padding:8px 4px;
+.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;background:var(--surface-2);border-radius:11px;padding:4px}
+.tabs button{font:inherit;font-weight:600;font-size:12px;border:0;border-radius:8px;padding:8px 2px;
   cursor:pointer;background:transparent;color:var(--ink-2)}
 .tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 .tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -141,6 +141,30 @@ img{max-width:100%}
   background:var(--surface);color:var(--ink)}
 .danger{color:var(--fake);background:none;border:0;font:inherit;cursor:pointer;padding:0;text-decoration:underline}
 .note{font-size:11.5px;color:var(--ink-3);line-height:1.6;border-top:1px solid var(--line);padding-top:12px}
+.search{display:flex;gap:8px}
+.search input{flex:1;font:inherit;font-size:16px;padding:11px 12px;border:1px solid var(--line);
+  border-radius:10px;background:var(--surface);color:var(--ink)}
+.search input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.entry{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:18px;display:flex;flex-direction:column;gap:12px}
+.entry .hw{font-family:"Newsreader",Georgia,serif;font-size:32px;font-weight:500;line-height:1.1}
+.entry .core{font-size:17px;font-weight:600}
+.pair{font-size:14px;line-height:1.5}
+.pair .t{font-family:"Newsreader",Georgia,serif}
+.pair .zh{color:var(--ink-2);font-size:13px}
+.der{border-top:1px solid var(--line);padding-top:10px}
+.der .dw{font-family:"Newsreader",Georgia,serif;font-size:17px;font-weight:500}
+.der .dipa{font-family:"Newsreader",Georgia,serif;font-style:italic;color:var(--ink-3);font-size:14px}
+.src-badge{font-size:11px;color:var(--ink-3)}
+.cal-day{border-top:1px solid var(--line);padding:11px 0}
+.cal-date{font-size:11.5px;font-weight:700;letter-spacing:.06em;color:var(--ink-3);margin-bottom:6px;
+  font-variant-numeric:tabular-nums}
+.cal-words{display:flex;flex-wrap:wrap;gap:6px}
+.cal-w{font-family:"Newsreader",Georgia,serif;font-size:14.5px;padding:3px 9px;border-radius:99px;
+  border:1px solid var(--accent);color:var(--accent);cursor:pointer;background:transparent}
+.cal-w.ai{background:var(--accent);color:#fff}
+:root[data-theme="dark"] .cal-w.ai,:root:not([data-theme="light"]) .cal-w.ai{color:#0E1C27}
+.cal-stat{font-size:12px;color:var(--ink-3);margin-top:6px;font-variant-numeric:tabular-nums}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -152,8 +176,10 @@ img{max-width:100%}
   </div>
 
   <div class="tabs" role="tablist">
-    <button role="tab" id="tab-deck" aria-selected="true">今日复习</button>
+    <button role="tab" id="tab-deck" aria-selected="true">复习</button>
     <button role="tab" id="tab-drill" aria-selected="false">真假词</button>
+    <button role="tab" id="tab-dict" aria-selected="false">查词</button>
+    <button role="tab" id="tab-cal" aria-selected="false">日历</button>
     <button role="tab" id="tab-more" aria-selected="false">进度</button>
   </div>
 
@@ -240,6 +266,24 @@ img{max-width:100%}
     </div>
   </section>
 
+  <!-- ============ 查词 ============ -->
+  <section id="panel-dict" hidden>
+    <div class="search">
+      <input id="q" type="search" placeholder="输入一个英语单词" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button class="btn primary" id="qbtn">查</button>
+    </div>
+    <div id="dict-msg" class="note" style="border:0;padding-top:10px"></div>
+    <div id="dict-out"></div>
+  </section>
+
+  <!-- ============ 日历 ============ -->
+  <section id="panel-cal" hidden>
+    <div class="note" style="border:0;padding-top:0">
+      实心 = 当时真的调了 AI，描边 = 直接读的本地词库。点词可以再看一次。
+    </div>
+    <div id="cal-out"></div>
+  </section>
+
   <!-- ============ 进度 ============ -->
   <section id="panel-more" hidden>
     <div class="stats">
@@ -265,6 +309,14 @@ img{max-width:100%}
         <option value="0">不限时</option>
       </select>
     </div>
+    <div class="setting" style="flex-direction:column;align-items:stretch;gap:7px">
+      <span>Gemini API 密钥（只有查词需要）</span>
+      <input type="password" id="set-key" placeholder="AIza… 或 AQ.…" autocomplete="off"
+        style="font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);width:100%">
+      <span style="font-size:11.5px;color:var(--ink-3)">
+        在 aistudio.google.com/apikey 免费申请，不用绑卡。只存在这台设备上，不会上传。
+      </span>
+    </div>
     <div class="setting"><span>清空学习进度</span><button class="danger" id="reset">清空</button></div>
 
     <p class="note" id="libnote"></p>
@@ -287,7 +339,7 @@ function lsSet(key, value){
 }
 
 let progress = lsGet(LS_PROGRESS, {});           // { word: { box:1|2|3, due:ms, seen:n } }
-let settings = Object.assign({ daily: 50, lvl: "all", limit: 5000 }, lsGet(LS_SETTINGS, {}));
+let settings = Object.assign({ daily: 50, lvl: "all", limit: 5000, key: "" }, lsGet(LS_SETTINGS, {}));
 const saveProgress = () => lsSet(LS_PROGRESS, progress);
 const saveSettings = () => lsSet(LS_SETTINGS, settings);
 
@@ -301,6 +353,7 @@ async function loadData(){
     manifest.shards.map((s) => fetch("data/" + s.file).then((r) => r.json()))
   );
   CARDS = groups.flat();
+  for (const c of lsGet(LS_EXTRA, [])) if (!CARDS.some((x) => x.w.toLowerCase() === c.w.toLowerCase())) CARDS.push(c);
   LEVELS = [...new Set(CARDS.map((c) => c.lvl))];
   FAKES = await (await fetch("data/fakewords.json")).json();
 }
@@ -406,6 +459,7 @@ function answerCard(remembered){
   if (!c) return;
   if (!progress[c.w]) progress[c.w] = { box: 1, seen: 0, started: Date.now() };
   grade(c.w, remembered);
+  logDay("card");
   queue.splice(idx, 1);
   if (!remembered) queue.push(c);          // 忘了的排到队尾，本轮再见一次
   renderCard();
@@ -487,6 +541,7 @@ function finishDrill(){
   $("drill-live").hidden = true;
   $("drill-report").hidden = false;
   const acc = Math.round((correct / probes.length) * 100);
+  logDay("drill", acc);
   $("r-acc").innerHTML = `${acc}%<small> 正确率</small>`;
   const avg = times.reduce((a, b) => a + b, 0) / times.length / 1000;
   $("r-time").textContent = `平均反应 ${avg.toFixed(1)} 秒 · 共 ${probes.length} 题`;
@@ -522,6 +577,215 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowRight" && !$("btn-real").disabled) answerProbe(true);
 });
 
+/* ===================== 查词 ===================== */
+const LS_LEXICON = "wc.lexicon.v1";
+const LS_DAYLOG  = "wc.daylog.v1";
+let lexicon = lsGet(LS_LEXICON, {});   // { word: { data, hits:[{at, ai}] } }
+let daylog  = lsGet(LS_DAYLOG, {});    // { "YYYY-MM-DD": { cards:n, drills:n, acc:n } }
+const saveLexicon = () => lsSet(LS_LEXICON, lexicon);
+const saveDaylog  = () => lsSet(LS_DAYLOG, daylog);
+const dateKey = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+
+function logDay(field, value){
+  const k = dateKey(Date.now());
+  const d = daylog[k] ?? { cards: 0, drills: 0, accSum: 0, accN: 0 };
+  if (field === "card") d.cards++;
+  if (field === "drill"){ d.drills++; d.accSum += value; d.accN++; }
+  daylog[k] = d; saveDaylog();
+}
+
+const DICT_PROMPT = `你是一个专业的英语—中文双语词典助手，服务对象是备考 Duolingo English Test 的中文母语学习者。
+
+接收一个英语单词，输出一份词汇报告。规则：
+
+1. w 填这个词的原形（比如输入 studies 就填 study）。
+2. ipa 用国际音标，斜杠包裹，例如 /ˈstʌdi/。
+3. pos 是词性缩写，例如 n. / v. / adj. / adv. / prep. / conj.，兼类就用 / 分隔。
+4. core 是中文释义，用顿号分隔多个义项，写地道中文，不要机翻腔。
+5. phrases 恰好 3 个常见搭配，examples 恰好 2 个例句。两者都用 {t, zh}：t 是英文，zh 是中文翻译。
+6. fam 是同词族的派生词，列全，常见的和不常见的都要。每项恰好 1 个短语和 1 个例句。
+   如果这个词确实没有派生词，fam 就只放它自己一项。
+7. conf 是形近或义近的易混词，0 到 3 个，只填真实存在的英语词。
+8. 所有内容字段只写内容，不要写「例句」「短语」「释义」这类标签词。
+9. 如果输入不是一个英语单词（拼写错误、是别的语言、查无此词），返回 notFound: true，
+   在 reason 里用中文说明原因，其余字段填空串和空数组。
+10. notFound 为 false 时，w、ipa、pos、core、phrases、examples、fam 都必须有真实内容。`;
+
+const PAIR = { type: "OBJECT", properties: { t: { type: "STRING" }, zh: { type: "STRING" } }, required: ["t","zh"] };
+const DICT_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    notFound: { type: "BOOLEAN" }, reason: { type: "STRING" },
+    w: { type: "STRING" }, ipa: { type: "STRING" }, pos: { type: "STRING" }, core: { type: "STRING" },
+    phrases: { type: "ARRAY", items: PAIR },
+    examples: { type: "ARRAY", items: PAIR },
+    fam: { type: "ARRAY", items: { type: "OBJECT", properties: {
+      w: { type: "STRING" }, ipa: { type: "STRING" }, zh: { type: "STRING" },
+      phrase: PAIR, example: PAIR }, required: ["w","ipa","zh","phrase","example"] } },
+    conf: { type: "ARRAY", items: { type: "STRING" } },
+  },
+  required: ["notFound","w","ipa","pos","core","phrases","examples","fam","conf"],
+};
+
+const DICT_MODEL = "gemini-3.6-flash";
+async function askGemini(word){
+  const key = settings.key;
+  if (!key) throw new Error("还没填 Gemini API 密钥，去「进度」页最下面填一个");
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${DICT_MODEL}:generateContent`,
+    { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: `${DICT_PROMPT}\n\n要查的词：${word}` }] }],
+        generationConfig: { responseMimeType: "application/json", responseSchema: DICT_SCHEMA, temperature: 0.3 },
+      }) });
+  if (!res.ok){
+    const t = await res.text();
+    if (res.status === 429) throw new Error("今天的免费额度用完了，明天再试");
+    if (res.status === 400 || res.status === 403) throw new Error("密钥无效或没有权限，检查一下「进度」页里填的密钥");
+    throw new Error(`查询失败（HTTP ${res.status}）${t.slice(0, 120)}`);
+  }
+  const j = await res.json();
+  const text = j?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (typeof text !== "string") throw new Error("模型返回的结构不对");
+  return JSON.parse(text);
+}
+
+// 本地词库命中：牌组里的卡片直接转成词条，不调 AI
+function fromDeck(word){
+  const w = word.toLowerCase();
+  const c = CARDS.find((x) => x.w.toLowerCase() === w)
+        || CARDS.find((x) => (x.fam || []).some((f) => f.toLowerCase() === w));
+  if (!c) return null;
+  return {
+    notFound: false, w: c.w, ipa: c.ipa, pos: c.pos, core: c.zh,
+    phrases: [], examples: [{ t: c.ex, zh: c.exZh }],
+    fam: (c.fam || []).map((f) => ({ w: f, ipa: "", zh: "", phrase: null, example: null })),
+    conf: c.conf || [], _fromDeck: true,
+  };
+}
+
+function recordHit(word, data, ai){
+  const w = word.toLowerCase();
+  const e = lexicon[w] ?? { data, hits: [] };
+  e.data = data;
+  e.hits.push({ at: Date.now(), ai });
+  lexicon[w] = e; saveLexicon();
+}
+
+function pairHtml(p){
+  if (!p) return "";
+  return `<div class="pair"><div class="t">${p.t}</div><div class="zh">${p.zh}</div></div>`;
+}
+function renderEntry(d, source){
+  if (d.notFound){
+    $("dict-out").innerHTML = `<div class="entry"><div class="core">查不到这个词</div>
+      <div class="pair zh">${d.reason || "请检查拼写"}</div></div>`;
+    return;
+  }
+  const inDeck = CARDS.some((c) => c.w.toLowerCase() === String(d.w).toLowerCase());
+  $("dict-out").innerHTML = `
+    <div class="entry">
+      <div>
+        <div class="hw">${d.w}</div>
+        <div class="ipa">${d.ipa || ""}</div>
+        <div class="pos">${d.pos || ""}</div>
+      </div>
+      <div class="core">${d.core}</div>
+      ${d.phrases?.length ? `<div class="row"><div class="rowlabel">常见搭配</div>${d.phrases.map(pairHtml).join("")}</div>` : ""}
+      ${d.examples?.length ? `<div class="row"><div class="rowlabel">例句</div>${d.examples.map(pairHtml).join("")}</div>` : ""}
+      ${d.conf?.length ? `<div class="row"><div class="rowlabel">易混</div><div class="conf">${d.conf.map((x)=>`<span>${x}</span>`).join("")}</div></div>` : ""}
+      ${d.fam?.length ? `<div class="row"><div class="rowlabel">词族</div>${
+        d.fam.map((f) => `<div class="der"><span class="dw">${f.w}</span> <span class="dipa">${f.ipa||""}</span>
+          <div class="pair zh">${f.zh||""}</div>${pairHtml(f.phrase)}${pairHtml(f.example)}</div>`).join("")}</div>` : ""}
+      <div class="src-badge">${source}</div>
+      ${inDeck ? "" : `<button class="btn primary" id="tocard">加入牌组</button>`}
+    </div>`;
+  if (!inDeck) $("tocard").addEventListener("click", () => addToDeck(d));
+}
+
+const LS_EXTRA = "wc.extra.v1";
+function addToDeck(d){
+  const card = {
+    w: d.w, ipa: d.ipa, pos: d.pos, zh: d.core,
+    fam: (d.fam || []).map((f) => f.w).filter((x) => x.toLowerCase() !== d.w.toLowerCase()).slice(0, 4),
+    ex: d.examples?.[0]?.t || "", exZh: d.examples?.[0]?.zh || "",
+    conf: (d.conf || []).slice(0, 3), lvl: "自查", src: "查词", c: ["其他"],
+  };
+  const extra = lsGet(LS_EXTRA, []);
+  if (!extra.some((c) => c.w.toLowerCase() === card.w.toLowerCase())) extra.push(card);
+  lsSet(LS_EXTRA, extra);
+  CARDS.push(card);
+  buildQueue();
+  $("tocard").textContent = "已加入牌组";
+  $("tocard").disabled = true;
+}
+
+async function lookup(word){
+  const w = String(word).trim().toLowerCase();
+  if (!w) return;
+  $("dict-msg").textContent = "查询中…";
+  $("dict-out").innerHTML = "";
+  try {
+    const cached = lexicon[w];
+    if (cached){
+      recordHit(w, cached.data, false);
+      renderEntry(cached.data, "读自本地词库");
+      $("dict-msg").textContent = "";
+      return;
+    }
+    const deck = fromDeck(w);
+    if (deck){
+      recordHit(w, deck, false);
+      renderEntry(deck, "读自已有卡片");
+      $("dict-msg").textContent = "";
+      return;
+    }
+    const data = await askGemini(w);
+    recordHit(w, data, true);
+    renderEntry(data, "AI 生成");
+    $("dict-msg").textContent = "";
+  } catch (err){
+    $("dict-msg").textContent = String(err.message || err);
+  }
+}
+$("qbtn").addEventListener("click", () => lookup($("q").value));
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter") lookup($("q").value); });
+
+/* ===================== 日历 ===================== */
+function renderCalendar(){
+  const byDate = {};
+  for (const [w, e] of Object.entries(lexicon)){
+    for (const h of e.hits){
+      const k = dateKey(h.at);
+      (byDate[k] ??= []).push({ w, ai: h.ai, at: h.at });
+    }
+  }
+  const days = [...new Set([...Object.keys(byDate), ...Object.keys(daylog)])].sort().reverse();
+  if (!days.length){
+    $("cal-out").innerHTML = `<div class="empty" style="margin-top:12px">
+      <div class="big">还没有记录</div><div>查过的词和每天的复习量会记在这里。</div></div>`;
+    return;
+  }
+  $("cal-out").innerHTML = days.map((k) => {
+    const words = (byDate[k] || []).sort((a, b) => b.at - a.at);
+    const seen = new Set();
+    const uniq = words.filter((x) => (seen.has(x.w) ? false : seen.add(x.w)));
+    const st = daylog[k];
+    const stat = st
+      ? `复习 ${st.cards} 张${st.accN ? ` · 速判 ${st.drills} 轮，平均正确率 ${Math.round(st.accSum / st.accN)}%` : ""}`
+      : "";
+    return `<div class="cal-day">
+      <div class="cal-date">${k}</div>
+      ${uniq.length ? `<div class="cal-words">${uniq.map((x) =>
+        `<button class="cal-w${x.ai ? " ai" : ""}" data-w="${x.w}">${x.w}</button>`).join("")}</div>` : ""}
+      ${stat ? `<div class="cal-stat">${stat}</div>` : ""}
+    </div>`;
+  }).join("");
+  for (const b of $("cal-out").querySelectorAll(".cal-w")){
+    b.addEventListener("click", () => { selectTab("dict"); $("q").value = b.dataset.w; lookup(b.dataset.w); });
+  }
+}
+
 /* ===================== 进度页 ===================== */
 function renderStats(){
   $("s-new").textContent = newCards().length;
@@ -542,6 +806,7 @@ $("set-lvl").addEventListener("change", (e) => {
   settings.lvl = e.target.value; saveSettings(); extraNew = 0; buildQueue(); renderCard(); renderStats();
 });
 $("set-limit").addEventListener("change", (e) => { settings.limit = Number(e.target.value); saveSettings(); });
+$("set-key").addEventListener("change", (e) => { settings.key = e.target.value.trim(); saveSettings(); });
 $("reset").addEventListener("click", () => {
   if (!confirm("清空全部学习进度？这一步不能撤销。")) return;
   progress = {}; saveProgress(); extraNew = 0; buildQueue(); renderCard(); renderStats();
@@ -550,23 +815,27 @@ $("reset").addEventListener("click", () => {
 /* ===================== 标签页 ===================== */
 let drillStarted = false;
 function selectTab(which){
-  for (const k of ["deck", "drill", "more"]){
+  for (const k of ["deck", "drill", "dict", "cal", "more"]){
     $("tab-" + k).setAttribute("aria-selected", String(k === which));
     $("panel-" + k).hidden = k !== which;
   }
   if (which === "drill" && !drillStarted){ drillStarted = true; resetDrill(); }
   if (which !== "drill"){ clearTimeout(timerId); $("btn-fake").disabled = true; $("btn-real").disabled = true; }
   if (which === "more") renderStats();
+  if (which === "cal") renderCalendar();
   if (which === "deck"){ buildQueue(); renderCard(); }
 }
 $("tab-deck").addEventListener("click", () => selectTab("deck"));
 $("tab-drill").addEventListener("click", () => selectTab("drill"));
+$("tab-dict").addEventListener("click", () => selectTab("dict"));
+$("tab-cal").addEventListener("click", () => selectTab("cal"));
 $("tab-more").addEventListener("click", () => selectTab("more"));
 
 /* ===================== 启动 ===================== */
 loadData().then(() => {
   $("set-daily").value = settings.daily;
   $("set-limit").value = String(settings.limit);
+  $("set-key").value = settings.key || "";
   const sel = $("set-lvl");
   for (const l of LEVELS){
     const o = document.createElement("option");
