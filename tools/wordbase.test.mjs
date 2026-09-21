@@ -73,3 +73,27 @@ test("isExactWord 不容忍屈折形", () => {
   assert.equal(isExactWord(base, "nationing"), false);
   assert.equal(isExactWord(base, "nations"), false);
 });
+
+// ---- 不规则变形：例句里出现 gave / went / children 时，也算提到了词头 ----
+
+test("wordForms 覆盖常见不规则动词", () => {
+  assert.ok(wordForms("give").has("gave"), "give→gave");
+  assert.ok(wordForms("give").has("given"), "give→given");
+  assert.ok(wordForms("go").has("went"), "go→went");
+  assert.ok(wordForms("go").has("gone"), "go→gone");
+  assert.ok(wordForms("take").has("took"), "take→took");
+  assert.ok(wordForms("be").has("was"), "be→was");
+  assert.ok(wordForms("be").has("were"), "be→were");
+});
+
+test("wordForms 覆盖常见不规则名词复数", () => {
+  assert.ok(wordForms("child").has("children"), "child→children");
+  assert.ok(wordForms("person").has("people"), "person→people");
+  assert.ok(wordForms("woman").has("women"), "woman→women");
+});
+
+test("wordForms 对规则词不受不规则表影响", () => {
+  const f = wordForms("walk");
+  assert.ok(f.has("walked") && f.has("walking") && f.has("walks"));
+  assert.equal(f.has("went"), false);
+});

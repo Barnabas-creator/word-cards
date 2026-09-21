@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { generateCards } from "../lib/gen-runner.mjs";
-import { shardCards, buildManifest, mergeManifest } from "../lib/shard.mjs";
+import { shardCards, buildManifest } from "../lib/shard.mjs";
 import { loadWordBase } from "../lib/wordbase.mjs";
 
 const apiKey = process.env.GEMINI_API_KEY;
@@ -24,39 +24,72 @@ async function callModel(body) {
 }
 
 const dataDir = fileURLToPath(new URL("../data/", import.meta.url));
+const readJson = (p, fallback) => (existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : fallback);
+
 let wordlist = JSON.parse(readFileSync(join(dataDir, "wordlist.json"), "utf8"));
 
 const only = process.argv.find((a) => a.startsWith("--lvl="));
-if (only) wordlist = wordlist.filter((e) => e.lvl === only.slice("--lvl=".length));
+const lvl = only ? only.slice("--lvl=".length) : null;
+if (lvl) wordlist = wordlist.filter((e) => e.lvl === lvl);
+
+// 续跑：已经有卡片的词跳过。免费层每天配额有限，重做已完成的词等于白烧额度。
+// --redo 可以强制重做（改了提示词、想整体刷新时用）。
+const redo = process.argv.includes("--redo");
+const existingByFile = new Map();
+for (const e of readJson(join(dataDir, "manifest.json"), { shards: [] }).shards ?? []) {
+  existingByFile.set(e.file, readJson(join(dataDir, e.file), []));
+}
+const done = new Set(
+  [...existingByFile.values()].flat().map((c) => String(c.w).toLowerCase()),
+);
+const totalInScope = wordlist.length;
+if (!redo) wordlist = wordlist.filter((e) => !done.has(String(e.w).toLowerCase()));
+
+if (wordlist.length === 0) {
+  console.log(`${lvl ?? "全量"} 范围内 ${totalInScope} 个词已全部生成，无需续跑。`);
+  process.exit(0);
+}
+console.log(`本次待生成 ${wordlist.length} 词（范围内共 ${totalInScope}，已完成 ${totalInScope - wordlist.length}）`);
+
+// 免费层的每日配额用尽后再跑也只是刷 429，立刻停手，剩下的留给明天
+const quotaExhausted = (err) =>
+  /HTTP 429/.test(String(err?.message ?? err)) && /PerDay|per day|RESOURCE_EXHAUSTED/i.test(String(err?.message ?? err));
 
 const wordBase = loadWordBase(fileURLToPath(new URL("./vendor/words_alpha.txt", import.meta.url)));
 
-const { cards, failed } = await generateCards({
+const { cards, failed, stopped } = await generateCards({
   wordlist, callModel, wordBase,
+  stopOnError: quotaExhausted,
   onProgress: ({ done, failed }) => process.stdout.write(`\r已生成 ${done} / ${wordlist.length}，失败 ${failed}`),
 });
 console.log();
-
-const readJson = (p, fallback) => (existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : fallback);
+if (stopped) console.log("⚠ 今日免费配额已用尽，已停止。明天再跑同一条命令即可从断点续上。");
 
 mkdirSync(dataDir, { recursive: true });
+
+// 分片必须与已有卡片合并：局部跑只生成了一部分，整份覆盖会抹掉之前几天的成果
 const shards = shardCards(cards);
-for (const [file, group] of shards) writeFileSync(join(dataDir, file), JSON.stringify(group));
+for (const [file, group] of shards) {
+  const prev = existingByFile.get(file) ?? readJson(join(dataDir, file), []);
+  const merged = new Map(prev.map((c) => [String(c.w).toLowerCase(), c]));
+  for (const c of group) merged.set(String(c.w).toLowerCase(), c);
+  const out = [...merged.values()];
+  shards.set(file, out);
+  writeFileSync(join(dataDir, file), JSON.stringify(out));
+}
+// 本次没碰到的旧分片也要留在 manifest 里
+for (const [file, group] of existingByFile) if (!shards.has(file)) shards.set(file, group);
 
 const manifestPath = join(dataDir, "manifest.json");
 const failedPath = join(dataDir, "failed.json");
 
-if (only) {
-  // 局部跑：manifest 与 failed 都与已有内容合并，不整份覆盖
-  const manifest = mergeManifest(readJson(manifestPath, { shards: [] }), shards, "v1");
-  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+// shards 现在总是承载「全部已知卡片」，所以 manifest 直接按它重建
+writeFileSync(manifestPath, JSON.stringify(buildManifest(shards, "v1"), null, 2));
 
-  const inScope = new Set(wordlist.map((e) => String(e.w).toLowerCase()));
-  const kept = readJson(failedPath, []).filter((e) => !inScope.has(String(e.w).toLowerCase()));
-  writeFileSync(failedPath, JSON.stringify([...kept, ...failed], null, 2));
-  console.log(`写入 ${shards.size} 个分片（${only.slice("--lvl=".length)} 局部跑，manifest 与 failed 已合并），失败 ${failed.length} 条`);
-} else {
-  writeFileSync(manifestPath, JSON.stringify(buildManifest(shards, "v1"), null, 2));
-  writeFileSync(failedPath, JSON.stringify(failed, null, 2));
-  console.log(`写入 ${shards.size} 个分片，失败 ${failed.length} 条，明细见 data/failed.json`);
-}
+// failed 只替换本次尝试过的词，其余保留
+const attempted = new Set(wordlist.map((e) => String(e.w).toLowerCase()));
+const kept = readJson(failedPath, []).filter((e) => !attempted.has(String(e.w).toLowerCase()));
+writeFileSync(failedPath, JSON.stringify([...kept, ...failed], null, 2));
+
+const total = [...shards.values()].reduce((n, g) => n + g.length, 0);
+console.log(`已写入 ${shards.size} 个分片，累计 ${total} 张卡片；本次失败 ${failed.length} 条，明细见 data/failed.json`);

@@ -143,3 +143,39 @@ test("退避上限 8 秒", async () => {
   });
   assert.deepEqual(delays, [1000, 2000, 4000, 8000, 8000, 8000]);
 });
+
+// ---- 每日配额耗尽时立刻停，别把剩下的批次全烧成 failed ----
+
+test("stopOnError 命中时立刻停止，剩余批次不被尝试也不进 failed", async () => {
+  let calls = 0;
+  const callModel = async () => { calls++; throw new Error("HTTP 429 RESOURCE_EXHAUSTED PerDay"); };
+  const wordlist = [
+    { w: "a", lvl: "A1", src: "NGSL" }, { w: "b", lvl: "A1", src: "NGSL" },
+    { w: "c", lvl: "A1", src: "NGSL" },
+  ];
+  const { cards, failed, stopped } = await generateCards({
+    wordlist, callModel, batchSize: 1, maxRetries: 1,
+    stopOnError: (err) => /429/.test(err.message),
+  });
+  assert.equal(stopped, true);
+  assert.equal(calls, 1, "第一批失败后就该停手");
+  assert.deepEqual(cards, []);
+  assert.deepEqual(failed.map((f) => f.w), ["a"], "只有已尝试的那批进 failed");
+});
+
+test("stopOnError 不命中时照常跑完全部批次", async () => {
+  const good = (w) => ({ w, ipa: "/x/", pos: "n.", zh: "啊", fam: [],
+    ex: "The nation voted for change last autumn without any real protest.",
+    exZh: "去年秋天全国投票支持变革。", conf: [], c: ["名词"] });
+  const reply = (items) => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(items) }] } }] });
+  const callModel = async (body) => {
+    const ws = body.contents[0].parts[0].text.split("这批词：\n")[1].split("\n");
+    return reply(ws.map(good));
+  };
+  const wordlist = [{ w: "a", lvl: "A1", src: "NGSL" }, { w: "b", lvl: "A1", src: "NGSL" }];
+  const { cards, stopped } = await generateCards({
+    wordlist, callModel, batchSize: 1, stopOnError: () => true,
+  });
+  assert.equal(stopped, false);
+  assert.equal(cards.length, 2);
+});
