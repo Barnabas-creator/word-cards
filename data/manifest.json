@@ -1,11 +1,16 @@
 {
   "version": "v1",
-  "total": 544,
+  "total": 786,
   "shards": [
     {
       "file": "deck-a1.json",
       "lvl": "A1",
-      "count": 544
+      "count": 687
+    },
+    {
+      "file": "deck-a2.json",
+      "lvl": "A2",
+      "count": 99
     }
   ]
 }

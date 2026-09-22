@@ -201,3 +201,30 @@ test("批次处理中的意外异常不会逃出 generateCards，已生成的卡
   assert.deepEqual(cards.map((c) => c.w), ["a", "c"], "第一批和第三批的卡片必须保住");
   assert.deepEqual(failed.map((f) => f.w), ["b"]);
 });
+
+test("逐卡校验抛异常时只记这一张失败，不中断整轮，已生成的卡片不丢", async () => {
+  const good = (w) => ({ w, ipa: "/x/", pos: "n.", zh: "啊", fam: [],
+    ex: `The ${w} voted for change last autumn without any real protest.`,
+    exZh: "去年秋天全国投票支持变革。", conf: [], c: ["名词"] });
+  const reply = (items) => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(items) }] } }] });
+  const callModel = async (body) => {
+    const ws = body.contents[0].parts[0].text.split("这批词：\n")[1].split("\n");
+    return reply(ws.map(good));
+  };
+  // 一个会在校验时抛异常的「词基」：模拟校验器自身的 bug
+  const wordBase = { has(w) { if (w === "boom") throw new Error("校验器炸了"); return true; } };
+  const wordlist = [
+    { w: "a", lvl: "A1", src: "NGSL" }, { w: "boom", lvl: "A1", src: "NGSL" },
+    { w: "c", lvl: "A1", src: "NGSL" },
+  ];
+  // 让 boom 这张卡带一个会触发校验的 fam
+  const callModel2 = async (body) => {
+    const ws = body.contents[0].parts[0].text.split("这批词：\n")[1].split("\n");
+    return reply(ws.map((w) => (w === "boom" ? { ...good(w), fam: ["boom"] } : good(w))));
+  };
+  const { cards, failed } = await generateCards({ wordlist, callModel: callModel2, wordBase, batchSize: 1, maxRetries: 1 });
+  assert.deepEqual(cards.map((c) => c.w), ["a", "c"]);
+  assert.equal(failed.length, 1);
+  assert.equal(failed[0].w, "boom");
+  assert.match(failed[0].reason, /校验器炸了/);
+});

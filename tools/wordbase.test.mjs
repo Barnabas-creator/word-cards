@@ -97,3 +97,12 @@ test("wordForms 对规则词不受不规则表影响", () => {
   assert.ok(f.has("walked") && f.has("walking") && f.has("walks"));
   assert.equal(f.has("went"), false);
 });
+
+// ---- 原型链上的属性名不能被当成不规则变形表的条目 ----
+
+test("wordForms 对 Object.prototype 上的属性名不崩（constructor 是 construct 的词族成员）", () => {
+  for (const w of ["constructor", "tostring", "valueof", "hasownproperty", "__proto__", "toString"]) {
+    const f = wordForms(w);
+    assert.ok(f.has(w.toLowerCase()), `${w} 应至少包含自身`);
+  }
+});

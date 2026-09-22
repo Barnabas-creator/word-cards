@@ -57,9 +57,16 @@ if (wordlist.length === 0) {
 }
 console.log(`本次待生成 ${wordlist.length} 词（范围内共 ${totalInScope}，已完成 ${totalInScope - wordlist.length}）`);
 
-// 免费层的每日配额用尽后再跑也只是刷 429，立刻停手，剩下的留给明天
-const quotaExhausted = (err) =>
-  /HTTP 429/.test(String(err?.message ?? err)) && /PerDay|per day|RESOURCE_EXHAUSTED/i.test(String(err?.message ?? err));
+// 两种情况立刻停手，交给外层换模型：
+// - 429 每日配额用尽：再跑也只是刷 429
+// - 503 过载：模型忙的时候硬冲，每批退避一秒试两次就判失败，会把几百个词成批打进
+//   failed，还白白消耗请求数。换个不忙的模型，过一阵再回来轮
+const quotaExhausted = (err) => {
+  const m = String(err?.message ?? err);
+  if (/HTTP 429/.test(m) && /PerDay|per day|RESOURCE_EXHAUSTED/i.test(m)) return true;
+  if (/HTTP 503/.test(m)) return true;
+  return false;
+};
 
 const wordBase = loadWordBase(fileURLToPath(new URL("./vendor/words_alpha.txt", import.meta.url)));
 
@@ -74,7 +81,7 @@ const { cards, failed, stopped } = await generateCards({
   onProgress: ({ done, failed }) => process.stdout.write(`\r已生成 ${done} / ${wordlist.length}，失败 ${failed}`),
 });
 console.log();
-if (stopped) console.log("⚠ 今日免费配额已用尽，已停止。明天再跑同一条命令即可从断点续上。");
+if (stopped) console.log("⚠ 模型过载或今日配额已用尽，已停止。换个模型或过一阵再跑同一条命令即可从断点续上。");
 
 mkdirSync(dataDir, { recursive: true });
 
