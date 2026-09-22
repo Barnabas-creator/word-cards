@@ -9,7 +9,10 @@ const SEED = 20260920;
 
 const dataDir = fileURLToPath(new URL("../data/", import.meta.url));
 const wordlist = JSON.parse(readFileSync(join(dataDir, "wordlist.json"), "utf8"));
-const wordBase = loadWordBase(fileURLToPath(new URL("./vendor/words_alpha.txt", import.meta.url)));
+const wordBase = loadWordBase(
+  fileURLToPath(new URL("./vendor/words_alpha.txt", import.meta.url)),
+  fileURLToPath(new URL("./vendor/words_supplement.txt", import.meta.url)),
+);
 
 const fakes = generateFakes({ wordlist, wordBase, target: 1200, rng: mulberry32(SEED) });
 writeFileSync(join(dataDir, "fakewords.json"), JSON.stringify(fakes));

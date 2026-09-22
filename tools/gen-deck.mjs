@@ -68,7 +68,10 @@ const quotaExhausted = (err) => {
   return false;
 };
 
-const wordBase = loadWordBase(fileURLToPath(new URL("./vendor/words_alpha.txt", import.meta.url)));
+const wordBase = loadWordBase(
+  fileURLToPath(new URL("./vendor/words_alpha.txt", import.meta.url)),
+  fileURLToPath(new URL("./vendor/words_supplement.txt", import.meta.url)),
+);
 
 // 免费层按「请求数」限额，不按词数。批次越大，同样的配额能出越多卡片。
 // 但批次太大模型容易漏词，50 是实测过的折中。

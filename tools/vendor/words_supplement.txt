@@ -1,0 +1,10 @@
+# words_alpha.txt 源自一本老词典，收不到一批现代常用词。
+# 生成卡片时模型给出的词族成员如果是真词、却被词基判为「不在真词基表里」，
+# 核实无误后加到这里。每行一个词，# 开头是注释。
+#
+# 2026-09-22：以下五个挡住了 source / sustain / click / sustainable 四张卡
+sustainability
+sustainably
+outsource
+sourcing
+clickable

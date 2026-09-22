@@ -106,3 +106,12 @@ test("wordForms 对 Object.prototype 上的属性名不崩（constructor 是 con
     assert.ok(f.has(w.toLowerCase()), `${w} 应至少包含自身`);
   }
 });
+
+test("loadWordBase 合并多个文件，跳过注释行和不存在的文件", () => {
+  const extra = join(tmpdir(), `wb-extra-${process.pid}.txt`);
+  writeFileSync(extra, "# 注释\nsustainability\n\noutsource\n");
+  const b = loadWordBase(p, extra, "/definitely/not/here.txt");
+  assert.ok(b.has("nation"), "主词表的词还在");
+  assert.ok(b.has("sustainability") && b.has("outsource"), "补充表的词合进来了");
+  assert.equal([...b].some((w) => w.startsWith("#")), false, "注释行没被当成词");
+});

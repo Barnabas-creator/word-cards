@@ -125,3 +125,10 @@ test("inflection studies匹配study", () => {
 test("逐条 schema 错误一并带出", () => {
   assert.ok(checkDeck({ cards: [{ ...card, lvl: "C1" }], fakes: [], wordBase }).some((e) => /lvl/.test(e)));
 });
+
+test("易混词不能同时出现在词族里", () => {
+  const wb = new Set(["problematic", "problem", "procedural"]);
+  const c = { ...card, w: "problematic", fam: ["problem"], conf: ["problem", "procedural"],
+    ex: "The problematic situation needs a careful solution from the whole team.", zh: "成问题的" };
+  assert.ok(checkDeck({ cards: [c], fakes: [], wordBase: wb }).some((e) => /易混.*词族/.test(e)));
+});

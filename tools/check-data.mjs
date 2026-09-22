@@ -38,7 +38,7 @@ function checkCoverage(dataDir, cards) {
   return errs;
 }
 
-export function collectErrors({ dataDir, wordBasePath }) {
+export function collectErrors({ dataDir, wordBasePath, supplementPath }) {
   if (!existsSync(dataDir)) {
     return [`缺少数据目录 ${dataDir}，请先运行 node tools/gen-deck.mjs 生成 deck-*.json 分片`];
   }
@@ -67,7 +67,7 @@ export function collectErrors({ dataDir, wordBasePath }) {
 
   errs.push(...checkCoverage(dataDir, cards));
   errs.push(...validateManifest(manifest, onDisk));
-  errs.push(...checkDeck({ cards, fakes, wordBase: loadWordBase(wordBasePath) }));
+  errs.push(...checkDeck({ cards, fakes, wordBase: loadWordBase(wordBasePath, supplementPath) }));
   return errs;
 }
 
@@ -75,6 +75,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const errs = collectErrors({
     dataDir: fileURLToPath(new URL("../data/", import.meta.url)),
     wordBasePath: fileURLToPath(new URL("./vendor/words_alpha.txt", import.meta.url)),
+    supplementPath: fileURLToPath(new URL("./vendor/words_supplement.txt", import.meta.url)),
   });
   if (errs.length) {
     for (const e of errs) console.error(e);

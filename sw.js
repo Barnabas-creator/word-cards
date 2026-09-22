@@ -4,7 +4,7 @@
 // 用户刷新了却还是旧页面，同步功能上线了却没人拿得到。
 // 对这个应用来说，离线可用是底线，但「在线时拿到最新」优先级更高：
 // 词库天天在长，功能也在改。
-const VERSION = "wc-v8";
+const VERSION = "wc-v9";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
