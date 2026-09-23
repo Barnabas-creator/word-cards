@@ -158,6 +158,15 @@ img{max-width:100%}
 .ipa-row{display:flex;align-items:center;gap:10px}
 .ex-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .search{display:flex;gap:8px}
+.qwrap{position:relative;flex:1;display:flex}
+.qwrap input{width:100%;padding-right:40px}
+.qclear{position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  width:28px;height:28px;border:0;border-radius:99px;background:var(--surface-2);color:var(--ink-2);
+  font:inherit;font-size:16px;line-height:1;cursor:pointer;display:none;
+  align-items:center;justify-content:center;padding:0;-webkit-tap-highlight-color:transparent}
+.qclear.on{display:flex}
+.qclear:active{background:var(--line)}
+.qclear:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .search input{flex:1;font:inherit;font-size:16px;padding:11px 12px;border:1px solid var(--line);
   border-radius:10px;background:var(--surface);color:var(--ink)}
 .search input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
@@ -202,7 +211,10 @@ img{max-width:100%}
   <!-- ============ 查词 ============ -->
   <section id="panel-dict">
     <div class="search">
-      <input id="q" type="search" placeholder="输入一个英语单词" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <div class="qwrap">
+        <input id="q" type="text" placeholder="输入一个英语单词" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
+        <button class="qclear" id="qclear" type="button" aria-label="清空" title="清空">✕</button>
+      </div>
       <button class="btn primary" id="qbtn">查</button>
     </div>
     <div id="dict-msg" class="note" style="border:0;padding-top:10px"></div>
@@ -924,6 +936,18 @@ async function lookup(word){
 $("qbtn").addEventListener("click", () => lookup($("q").value));
 $("q").addEventListener("keydown", (e) => { if (e.key === "Enter") lookup($("q").value); });
 
+// 清空键：输入框有内容才出现
+function toggleClear(){ $("qclear").classList.toggle("on", $("q").value.length > 0); }
+$("q").addEventListener("input", toggleClear);
+$("qclear").addEventListener("click", () => {
+  $("q").value = "";
+  toggleClear();
+  $("dict-msg").textContent = "";
+  $("dict-out").innerHTML = "";
+  tts.stop();
+  $("q").focus();
+});
+
 /* ===================== 日历 ===================== */
 function renderCalendar(){
   const byDate = {};
@@ -955,7 +979,7 @@ function renderCalendar(){
     </div>`;
   }).join("");
   for (const b of $("cal-out").querySelectorAll(".cal-w")){
-    b.addEventListener("click", () => { selectTab("dict"); $("q").value = b.dataset.w; lookup(b.dataset.w); });
+    b.addEventListener("click", () => { selectTab("dict"); $("q").value = b.dataset.w; toggleClear(); lookup(b.dataset.w); });
   }
 }
 
@@ -1153,6 +1177,7 @@ loadData().then(() => {
   updateToday();
   selectTab("dict");
   $("q").focus();
+  toggleClear();
   syncNow();
 }).catch((err) => {
   $("today").textContent = "词库加载失败";
