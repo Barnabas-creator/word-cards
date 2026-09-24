@@ -392,7 +392,7 @@ const saveProgress = () => lsSet(LS_PROGRESS, progress);
 const saveSettings = () => lsSet(LS_SETTINGS, settings);
 
 /* ===================== 数据 ===================== */
-let CARDS = [], FAKES = [], LEVELS = [];
+let CARDS = [], FAKES = [], LEVELS = [], FAMGLOSS = {};
 const $ = (id) => document.getElementById(id);
 
 async function loadData(){
@@ -404,6 +404,8 @@ async function loadData(){
   for (const c of lsGet(LS_EXTRA, [])) if (!CARDS.some((x) => x.w.toLowerCase() === c.w.toLowerCase())) CARDS.push(c);
   LEVELS = [...new Set(CARDS.map((c) => c.lvl))];
   FAKES = await (await fetch("data/fakewords.json")).json();
+  // 词族释义表缺了也不影响背卡，查词页的词族只是少了中文
+  FAMGLOSS = await fetch("data/famgloss.json").then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
 }
 
 /* ===================== Leitner ===================== */
@@ -838,9 +840,18 @@ function fromDeck(word){
   return {
     notFound: false, w: c.w, ipa: c.ipa, pos: c.pos, core: c.zh,
     phrases: [], examples: [{ t: c.ex, zh: c.exZh }],
-    fam: (c.fam || []).map((f) => ({ w: f, ipa: "", zh: "", phrase: null, example: null })),
+    fam: (c.fam || []).map((f) => ({ w: f, ...famInfo(f), phrase: null, example: null })),
     conf: c.conf || [], _fromDeck: true,
   };
+}
+
+// 词族成员的音标和释义：自己有卡片就用卡片的，否则查 famgloss.json
+function famInfo(word){
+  const w = String(word).toLowerCase();
+  const c = CARDS.find((x) => x.w.toLowerCase() === w);
+  if (c) return { ipa: c.ipa || "", zh: c.zh || "" };
+  const g = Object.hasOwn(FAMGLOSS, w) ? FAMGLOSS[w] : null;   // constructor 这类词会撞上对象原型
+  return { ipa: g?.ipa || "", zh: g?.zh || "" };
 }
 
 function recordHit(word, data, ai){
@@ -855,7 +866,8 @@ function pairHtml(p){
   if (!p) return "";
   return `<div class="pair"><div class="t">${p.t}</div><div class="zh">${p.zh}</div></div>`;
 }
-function renderEntry(d, source, added = false){
+const inDeck = (w) => CARDS.some((c) => c.w.toLowerCase() === String(w).toLowerCase());
+function renderEntry(d, source){
   if (d.notFound){
     $("dict-out").innerHTML = `<div class="entry"><div class="core">查不到这个词</div>
       <div class="pair zh">${d.reason || "请检查拼写"}</div></div>`;
@@ -876,17 +888,25 @@ function renderEntry(d, source, added = false){
       ${d.examples?.length ? `<div class="row"><div class="rowlabel">例句</div>${d.examples.map(pairHtml).join("")}</div>` : ""}
       ${d.conf?.length ? `<div class="row"><div class="rowlabel">易混</div><div class="conf">${d.conf.map((x)=>`<span>${x}</span>`).join("")}</div></div>` : ""}
       ${d.fam?.length ? `<div class="row"><div class="rowlabel">词族</div>${
-        d.fam.map((f) => `<div class="der"><span class="dw">${f.w}</span> <span class="dipa">${f.ipa||""}</span>
+        d.fam.map((f) => ({ ...famInfo(f.w), ...Object.fromEntries(Object.entries(f).filter(([, v]) => v)) }))
+          .map((f) => `<div class="der"><span class="dw">${f.w}</span> <span class="dipa">${f.ipa||""}</span>
           <div class="pair zh">${f.zh||""}</div>${pairHtml(f.phrase)}${pairHtml(f.example)}</div>`).join("")}</div>` : ""}
-      <div class="src-badge">${source}${added ? " · 已加入牌组，会进入复习队列" : ""}</div>
+      <div class="src-badge">${source}<span id="e-added">${inDeck(d.w) ? " · 已在复习卡片里" : ""}</span></div>
+      ${inDeck(d.w) ? "" : `<button class="btn" id="e-add" type="button">加入复习卡片</button>`}
     </div>`;
   const spk = $("e-spk");
   if (spk) spk.addEventListener("click", () => tts.speakPair(d.w, d.examples?.[0]?.t));
+  const add = $("e-add");
+  if (add) add.addEventListener("click", () => {
+    addToDeck(d);
+    add.remove();
+    $("e-added").textContent = " · 已加入，会优先进入复习";
+  });
   if (settings.autoSpeak) tts.speak(d.w, { rate: 0.85 });   // 查到就读一遍
 }
 
 const LS_EXTRA = "wc.extra.v1";
-// 查到的词自动进牌组：已经在库里的就跳过，返回是否新加了一张
+// 查到的词手动加入牌组（查词页的「加入复习卡片」按钮）：已经在库里的就跳过，返回是否新加了一张
 function addToDeck(d){
   if (d.notFound || !d.w) return false;
   if (CARDS.some((c) => c.w.toLowerCase() === String(d.w).toLowerCase())) return false;
@@ -914,20 +934,20 @@ async function lookup(word){
     const cached = lexicon[w];
     if (cached){
       recordHit(w, cached.data, false);
-      renderEntry(cached.data, "读自本地词库", addToDeck(cached.data));
+      renderEntry(cached.data, "读自本地词库");
       $("dict-msg").textContent = "";
       return;
     }
     const deck = fromDeck(w);
     if (deck){
       recordHit(w, deck, false);
-      renderEntry(deck, "读自已有卡片");   // 本来就在牌组里，不必再加
+      renderEntry(deck, "读自已有卡片");
       $("dict-msg").textContent = "";
       return;
     }
     const data = await askGemini(w, (msg) => { $("dict-msg").textContent = msg; });
     recordHit(w, data, true);
-    renderEntry(data, "AI 生成", addToDeck(data));
+    renderEntry(data, "AI 生成");
     $("dict-msg").textContent = "";
   } catch (err){
     $("dict-msg").textContent = String(err.message || err);

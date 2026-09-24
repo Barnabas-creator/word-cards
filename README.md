@@ -33,6 +33,12 @@ GEMINI_MODEL=gemini-3.5-flash node tools/gen-deck.mjs   # 换模型（配额按�
 免费层是**每个模型每天 20 次请求**。脚本会跳过已生成的词，配额用尽时立刻停手，
 第二天跑同一条命令即可续上。
 
+加了新卡片之后，再补一次词族释义（查词页显示词族成员的音标和中文用）：
+
+```bash
+node tools/gen-famgloss.mjs   # 只给自己没有卡片的词族成员补，写 data/famgloss.json，可续跑
+```
+
 ## 校验
 
 ```bash
