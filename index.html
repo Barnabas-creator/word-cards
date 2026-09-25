@@ -352,6 +352,10 @@ html,body{overscroll-behavior-y:contain}
         <option value="off">关闭</option>
       </select>
     </div>
+    <div class="setting"><span>音色</span>
+      <select id="set-voice"><option value="">自动（推荐）</option></select>
+    </div>
+    <div class="note" style="border:0;padding-top:0">每台手机自带的音色不一样。听着发闷、发混就换一个，选了会马上试读一句；只对这台手机生效。</div>
     <div class="setting"><span>翻面自动朗读</span>
       <select id="set-auto">
         <option value="1">开</option>
@@ -397,7 +401,7 @@ function lsSet(key, value){
 }
 
 let progress = lsGet(LS_PROGRESS, {});           // { word: { box:1|2|3, due:ms, seen:n } }
-let settings = Object.assign({ daily: 50, lvl: "all", limit: 5000, key: "", accent: "en-us", autoSpeak: 1 }, lsGet(LS_SETTINGS, {}));
+let settings = Object.assign({ daily: 50, lvl: "all", limit: 5000, key: "", accent: "en-us", autoSpeak: 1, voice: "" }, lsGet(LS_SETTINGS, {}));
 const saveProgress = () => lsSet(LS_PROGRESS, progress);
 const saveSettings = () => lsSet(LS_SETTINGS, settings);
 
@@ -477,19 +481,38 @@ const CANCEL_GAP_MS = 120;
 const VOICES_TIMEOUT_MS = 2000;
 const synth = window.speechSynthesis;
 
-function pickVoice(voices, want){
+const normLang = (l) => String(l ?? "").replace("_", "-").toLowerCase();
+const englishVoices = (voices) => (voices ?? []).filter((v) => normLang(v.lang).startsWith("en"));
+
+// 音色打分。以前是「本地音色优先」，结果在不少手机上挑中的是厂商自带的低质量引擎
+// （三星/国产机的 TTS、iOS 的 compact 精简音色、eSpeak/Pico），听着发闷发混。
+// 名字里带 Enhanced / Premium / Neural / Natural / Google / Siri 的一般清楚得多。
+function voiceScore(v, want){
+  const name = String(v.name ?? "");
+  let s = 0;
+  if (normLang(v.lang) === want) s += 4;
+  if (/enhanced|premium|neural|natural|google|siri/i.test(name)) s += 3;
+  if (/compact|espeak|pico|robot/i.test(name)) s -= 4;
+  if (v.localService) s += 1;   // 本地音色断网也能读，同分时优先
+  else if (!navigator.onLine) s -= 10;   // 网络音色断网不出声，没网时别选它
+  return s;
+}
+function rankedVoices(voices, want){
+  return englishVoices(voices).sort((a, b) => voiceScore(b, want) - voiceScore(a, want));
+}
+function pickVoice(voices, want, chosen){
   const list = voices ?? [];
-  const norm = (l) => String(l ?? "").replace("_", "-").toLowerCase();
-  const exact = list.filter((v) => norm(v.lang) === want);
-  // 优先挑本地音色：网络音色在断网时不发声
-  return exact.find((v) => v.localService) ?? exact[0]
-      ?? list.find((v) => norm(v.lang).split("-")[0] === "en") ?? null;
+  if (chosen){
+    const v = list.find((x) => x.voiceURI === chosen || x.name === chosen);
+    if (v) return v;   // 她在设置里手动选过的，换了手机找不到就退回自动
+  }
+  return rankedVoices(list, want)[0] ?? null;
 }
 
 const tts = (() => {
   if (!synth) return { speak(){}, stop(){}, available: false };
   const voicesLoaded = () => (synth.getVoices() ?? []).length > 0;
-  const voice = () => pickVoice(synth.getVoices(), settings.accent || "en-us");
+  const voice = () => pickVoice(synth.getVoices(), settings.accent || "en-us", settings.voice);
 
   let readyPromise = null;
   function whenReady(){
@@ -510,7 +533,7 @@ const tts = (() => {
     u.rate = rate;
     const v = voice();
     // 挂音色失败不能连累整句朗读：只设 lang 让系统尽力读，总比一声不出强
-    try { if (v) u.voice = v; } catch {}
+    try { if (v){ u.voice = v; u.lang = v.lang; } } catch {}
     return u;
   }
   function push(u){ synth.resume?.(); synth.speak(u); }
@@ -1204,8 +1227,28 @@ $("set-lvl").addEventListener("change", (e) => {
 });
 $("set-limit").addEventListener("change", (e) => { settings.limit = Number(e.target.value); saveSettings(); });
 $("set-key").addEventListener("change", (e) => { settings.key = e.target.value.trim(); saveSettings(); });
+// 音色下拉：本机所有英语音色，按 voiceScore 排序。音色可能在 voiceschanged 之后才到齐，到了再填一次
+function fillVoices(){
+  const sel = $("set-voice");
+  if (!sel || !synth) return;
+  const want = settings.accent === "en-gb" ? "en-gb" : "en-us";
+  const list = rankedVoices(synth.getVoices(), want);
+  sel.length = 1;
+  for (const v of list){
+    const o = document.createElement("option");
+    o.value = v.voiceURI || v.name;
+    o.textContent = `${v.name}（${v.lang}）`;
+    sel.appendChild(o);
+  }
+  sel.value = list.some((v) => (v.voiceURI || v.name) === settings.voice) ? settings.voice : "";
+}
+synth?.addEventListener?.("voiceschanged", fillVoices);
+$("set-voice").addEventListener("change", (e) => {
+  settings.voice = e.target.value; saveSettings();
+  tts.speak("Hello! This is how I sound.");
+});
 $("set-accent").addEventListener("change", (e) => {
-  settings.accent = e.target.value; saveSettings();
+  settings.accent = e.target.value; settings.voice = ""; saveSettings(); fillVoices();
   if (settings.accent !== "off") tts.speak("ready");    // 立刻试一声，让她知道换了音色
 });
 $("set-auto").addEventListener("change", (e) => { settings.autoSpeak = Number(e.target.value); saveSettings(); });
@@ -1239,6 +1282,7 @@ loadData().then(() => {
   $("set-limit").value = String(settings.limit);
   $("set-key").value = settings.key || "";
   $("set-accent").value = settings.accent;
+  fillVoices();
   $("set-auto").value = String(settings.autoSpeak);
   const sel = $("set-lvl");
   for (const l of LEVELS){
